@@ -323,6 +323,25 @@ Examples:
     # Subcommands
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
+    # gateway subcommand
+    gateway_parser = subparsers.add_parser("gateway", help="Start the API Gateway server")
+    gateway_parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Host to bind (default: 0.0.0.0)",
+    )
+    gateway_parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to bind (default: 8000)",
+    )
+    gateway_parser.add_argument(
+        "--reload",
+        action="store_true",
+        help="Enable auto-reload (dev mode)",
+    )
+
     # log subcommand
     log_parser = subparsers.add_parser("log", help="Show log directory or read log files")
     log_parser.add_argument(
@@ -845,6 +864,13 @@ def main():
     """Main entry point for CLI"""
     # Parse command line arguments
     args = parse_args()
+
+    # Handle gateway subcommand
+    if args.command == "gateway":
+        from mini_agent.gateway.app import start_server
+        print(f"{Colors.BRIGHT_CYAN}🚀 Starting Mini-Agent Gateway on {args.host}:{args.port}...{Colors.RESET}")
+        start_server(host=args.host, port=args.port, reload=args.reload)
+        return
 
     # Handle log subcommand
     if args.command == "log":
