@@ -13,7 +13,7 @@ Features:
 import asyncio
 import functools
 import logging
-from typing import Any, Callable, Type, TypeVar
+from typing import Any, Callable, Type, TypeVar, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +71,8 @@ class RetryExhaustedError(Exception):
 
 
 def async_retry(
-    config: RetryConfig | None = None,
-    on_retry: Callable[[Exception, int], None] | None = None,
+    config: Optional[RetryConfig] = None,
+    on_retry: Optional[Callable[[Exception, int], None]] = None,
 ) -> Callable:
     """Async function retry decorator
 
@@ -97,7 +97,7 @@ def async_retry(
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            last_exception: Exception | None = None
+            last_exception: Optional[Exception] = None
 
             for attempt in range(config.max_retries + 1):
                 try:

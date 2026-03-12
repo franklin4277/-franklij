@@ -5,6 +5,7 @@ This module provides a unified interface for different LLM providers
 """
 
 import logging
+from typing import Optional, Any
 
 from ..retry import RetryConfig
 from ..schema import LLMProvider, LLMResponse, Message
@@ -39,7 +40,7 @@ class LLMClient:
         provider: LLMProvider = LLMProvider.ANTHROPIC,
         api_base: str = "https://api.minimaxi.com",
         model: str = "MiniMax-M2.5",
-        retry_config: RetryConfig | None = None,
+        retry_config: Optional[RetryConfig] = None,
     ):
         """Initialize LLM client with specified provider.
 
@@ -113,7 +114,7 @@ class LLMClient:
     async def generate(
         self,
         messages: list[Message],
-        tools: list | None = None,
+        tools: Optional[list[Any]] = None,
     ) -> LLMResponse:
         """Generate response from LLM.
 

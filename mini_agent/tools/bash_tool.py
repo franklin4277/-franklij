@@ -8,7 +8,7 @@ import platform
 import re
 import time
 import uuid
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import Field, model_validator
 
@@ -27,7 +27,7 @@ class BashOutputResult(ToolResult):
     stdout: str = Field(description="The command's standard output")
     stderr: str = Field(description="The command's standard error output")
     exit_code: int = Field(description="The command's exit code")
-    bash_id: str | None = Field(default=None, description="Shell process ID (only when run_in_background=True)")
+    bash_id: Optional[str] = Field(default=None, description="Shell process ID (only when run_in_background=True)")
 
     @model_validator(mode="after")
     def format_content(self) -> "BashOutputResult":
@@ -64,13 +64,13 @@ class BackgroundShell:
         self.output_lines: list[str] = []
         self.last_read_index = 0
         self.status = "running"
-        self.exit_code: int | None = None
+        self.exit_code: Optional[int] = None
 
     def add_output(self, line: str):
         """Add new output line."""
         self.output_lines.append(line)
 
-    def get_new_output(self, filter_pattern: str | None = None) -> list[str]:
+    def get_new_output(self, filter_pattern: Optional[str] = None) -> list[str]:
         """Get new output since last check, optionally filtered by regex."""
         new_lines = self.output_lines[self.last_read_index :]
         self.last_read_index = len(self.output_lines)
@@ -85,7 +85,7 @@ class BackgroundShell:
 
         return new_lines
 
-    def update_status(self, is_alive: bool, exit_code: int | None = None):
+    def update_status(self, is_alive: bool, exit_code: Optional[int] = None):
         """Update process status."""
         if not is_alive:
             self.status = "completed" if exit_code == 0 else "failed"
@@ -117,7 +117,7 @@ class BackgroundShellManager:
         cls._shells[shell.bash_id] = shell
 
     @classmethod
-    def get(cls, bash_id: str) -> BackgroundShell | None:
+    def get(cls, bash_id: str) -> Optional[BackgroundShell]:
         """Get a background shell by ID."""
         return cls._shells.get(bash_id)
 
@@ -222,7 +222,7 @@ class BashTool(Tool):
     - Unix/Linux/macOS: bash
     """
 
-    def __init__(self, workspace_dir: str | None = None):
+    def __init__(self, workspace_dir: Optional[str] = None):
         """Initialize BashTool with OS-specific shell detection.
 
         Args:
@@ -485,7 +485,7 @@ class BashOutputTool(Tool):
     async def execute(
         self,
         bash_id: str,
-        filter_str: str | None = None,
+        filter_str: Optional[str] = None,
     ) -> BashOutputResult:
         """Retrieve output from background shell.
 

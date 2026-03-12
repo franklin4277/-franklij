@@ -1,7 +1,7 @@
 """File operation tools."""
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import tiktoken
 
@@ -105,7 +105,7 @@ class ReadTool(Tool):
             "required": ["path"],
         }
 
-    async def execute(self, path: str, offset: int | None = None, limit: int | None = None) -> ToolResult:
+    async def execute(self, path: str, offset: Optional[int] = None, limit: Optional[int] = None) -> ToolResult:
         """Execute read file."""
         try:
             file_path = Path(path)

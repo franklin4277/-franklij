@@ -1,6 +1,6 @@
 """Base tool classes."""
 
-from typing import Any
+from typing import Any, Optional, Union
 
 from pydantic import BaseModel
 
@@ -10,7 +10,7 @@ class ToolResult(BaseModel):
 
     success: bool
     content: str = ""
-    error: str | None = None
+    error: Optional[str] = None
 
 
 class Tool:

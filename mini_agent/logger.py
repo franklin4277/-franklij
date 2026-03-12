@@ -3,7 +3,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from .schema import Message, ToolCall
 
@@ -40,7 +40,7 @@ class AgentLogger:
             f.write(f"Agent Run Log - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write("=" * 80 + "\n\n")
 
-    def log_request(self, messages: list[Message], tools: list[Any] | None = None):
+    def log_request(self, messages: list[Message], tools: Optional[list[Any]] = None):
         """Log LLM request
 
         Args:
@@ -85,9 +85,9 @@ class AgentLogger:
     def log_response(
         self,
         content: str,
-        thinking: str | None = None,
-        tool_calls: list[ToolCall] | None = None,
-        finish_reason: str | None = None,
+        thinking: Optional[str] = None,
+        tool_calls: Optional[list[ToolCall]] = None,
+        finish_reason: Optional[str] = None,
     ):
         """Log LLM response
 
@@ -124,8 +124,8 @@ class AgentLogger:
         tool_name: str,
         arguments: dict[str, Any],
         result_success: bool,
-        result_content: str | None = None,
-        result_error: str | None = None,
+        result_content: Optional[str] = None,
+        result_error: Optional[str] = None,
     ):
         """Log tool execution result
 

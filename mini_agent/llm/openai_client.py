@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Any
+from typing import Any, Optional, Union
 
 from openai import AsyncOpenAI
 
@@ -27,7 +27,7 @@ class OpenAIClient(LLMClientBase):
         api_key: str,
         api_base: str = "https://api.minimaxi.com/v1",
         model: str = "MiniMax-M2.5",
-        retry_config: RetryConfig | None = None,
+        retry_config: Optional[RetryConfig] = None,
     ):
         """Initialize OpenAI client.
 
@@ -48,7 +48,7 @@ class OpenAIClient(LLMClientBase):
     async def _make_api_request(
         self,
         api_messages: list[dict[str, Any]],
-        tools: list[Any] | None = None,
+        tools: Optional[list[Any]] = None,
     ) -> Any:
         """Execute API request (core method that can be retried).
 
@@ -111,7 +111,7 @@ class OpenAIClient(LLMClientBase):
                 raise TypeError(f"Unsupported tool type: {type(tool)}")
         return result
 
-    def _convert_messages(self, messages: list[Message]) -> tuple[str | None, list[dict[str, Any]]]:
+    def _convert_messages(self, messages: list[Message]) -> tuple[Optional[str], list[dict[str, Any]]]:
         """Convert internal messages to OpenAI format.
 
         Args:
@@ -182,7 +182,7 @@ class OpenAIClient(LLMClientBase):
     def _prepare_request(
         self,
         messages: list[Message],
-        tools: list[Any] | None = None,
+        tools: Optional[list[Any]] = None,
     ) -> dict[str, Any]:
         """Prepare the request for OpenAI API.
 
@@ -261,7 +261,7 @@ class OpenAIClient(LLMClientBase):
     async def generate(
         self,
         messages: list[Message],
-        tools: list[Any] | None = None,
+        tools: Optional[list[Any]] = None,
     ) -> LLMResponse:
         """Generate response from OpenAI LLM.
 

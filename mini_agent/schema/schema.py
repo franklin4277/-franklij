@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any
+from typing import Any, Union, Optional
 
 from pydantic import BaseModel
 
@@ -30,11 +30,11 @@ class Message(BaseModel):
     """Chat message."""
 
     role: str  # "system", "user", "assistant", "tool"
-    content: str | list[dict[str, Any]]  # Can be string or list of content blocks
-    thinking: str | None = None  # Extended thinking content for assistant messages
-    tool_calls: list[ToolCall] | None = None
-    tool_call_id: str | None = None
-    name: str | None = None  # For tool role
+    content: Union[str, list[dict[str, Any]]]  # Can be string or list of content blocks
+    thinking: Optional[str] = None  # Extended thinking content for assistant messages
+    tool_calls: Optional[list[ToolCall]] = None
+    tool_call_id: Optional[str] = None
+    name: Optional[str] = None  # For tool role
 
 
 class TokenUsage(BaseModel):
@@ -49,7 +49,7 @@ class LLMResponse(BaseModel):
     """LLM response."""
 
     content: str
-    thinking: str | None = None  # Extended thinking blocks
-    tool_calls: list[ToolCall] | None = None
+    thinking: Optional[str] = None  # Extended thinking blocks
+    tool_calls: Optional[list[ToolCall]] = None
     finish_reason: str
-    usage: TokenUsage | None = None  # Token usage from API response
+    usage: Optional[TokenUsage] = None  # Token usage from API response

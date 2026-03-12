@@ -4,6 +4,7 @@ Provides unified configuration loading and management functionality
 """
 
 from pathlib import Path
+from typing import Union, Optional
 
 import yaml
 from pydantic import BaseModel, Field
@@ -79,7 +80,7 @@ class Config(BaseModel):
         return cls.from_yaml(config_path)
 
     @classmethod
-    def from_yaml(cls, config_path: str | Path) -> "Config":
+    def from_yaml(cls, config_path: Union[str, Path]) -> "Config":
         """Load configuration from YAML file
 
         Args:
@@ -174,7 +175,7 @@ class Config(BaseModel):
         return Path(__file__).parent
 
     @classmethod
-    def find_config_file(cls, filename: str) -> Path | None:
+    def find_config_file(cls, filename: str) -> Optional[Path]:
         """Find configuration file with priority order
 
         Search for config file in the following order of priority:

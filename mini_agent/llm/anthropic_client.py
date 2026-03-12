@@ -1,7 +1,7 @@
 """Anthropic LLM client implementation."""
 
 import logging
-from typing import Any
+from typing import Any, Optional, Union
 
 import anthropic
 
@@ -26,7 +26,7 @@ class AnthropicClient(LLMClientBase):
         api_key: str,
         api_base: str = "https://api.minimaxi.com/anthropic",
         model: str = "MiniMax-M2.5",
-        retry_config: RetryConfig | None = None,
+        retry_config: Optional[RetryConfig] = None,
     ):
         """Initialize Anthropic client.
 
@@ -47,9 +47,9 @@ class AnthropicClient(LLMClientBase):
 
     async def _make_api_request(
         self,
-        system_message: str | None,
+        system_message: Optional[str],
         api_messages: list[dict[str, Any]],
-        tools: list[Any] | None = None,
+        tools: Optional[list[Any]] = None,
     ) -> anthropic.types.Message:
         """Execute API request (core method that can be retried).
 
@@ -111,7 +111,7 @@ class AnthropicClient(LLMClientBase):
                 raise TypeError(f"Unsupported tool type: {type(tool)}")
         return result
 
-    def _convert_messages(self, messages: list[Message]) -> tuple[str | None, list[dict[str, Any]]]:
+    def _convert_messages(self, messages: list[Message]) -> tuple[Optional[str], list[dict[str, Any]]]:
         """Convert internal messages to Anthropic format.
 
         Args:
@@ -180,7 +180,7 @@ class AnthropicClient(LLMClientBase):
     def _prepare_request(
         self,
         messages: list[Message],
-        tools: list[Any] | None = None,
+        tools: Optional[list[Any]] = None,
     ) -> dict[str, Any]:
         """Prepare the request for Anthropic API.
 
@@ -257,7 +257,7 @@ class AnthropicClient(LLMClientBase):
     async def generate(
         self,
         messages: list[Message],
-        tools: list[Any] | None = None,
+        tools: Optional[list[Any]] = None,
     ) -> LLMResponse:
         """Generate response from Anthropic LLM.
 

@@ -1,7 +1,7 @@
 """Base class for LLM clients."""
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Optional, Union
 
 from ..retry import RetryConfig
 from ..schema import LLMResponse, Message
@@ -19,7 +19,7 @@ class LLMClientBase(ABC):
         api_key: str,
         api_base: str,
         model: str,
-        retry_config: RetryConfig | None = None,
+        retry_config: Optional[RetryConfig] = None,
     ):
         """Initialize the LLM client.
 
@@ -41,7 +41,7 @@ class LLMClientBase(ABC):
     async def generate(
         self,
         messages: list[Message],
-        tools: list[Any] | None = None,
+        tools: Optional[list[Any]] = None,
     ) -> LLMResponse:
         """Generate response from LLM.
 
@@ -58,7 +58,7 @@ class LLMClientBase(ABC):
     def _prepare_request(
         self,
         messages: list[Message],
-        tools: list[Any] | None = None,
+        tools: Optional[list[Any]] = None,
     ) -> dict[str, Any]:
         """Prepare the request payload for the API.
 
@@ -72,7 +72,7 @@ class LLMClientBase(ABC):
         pass
 
     @abstractmethod
-    def _convert_messages(self, messages: list[Message]) -> tuple[str | None, list[dict[str, Any]]]:
+    def _convert_messages(self, messages: list[Message]) -> tuple[Optional[str], list[dict[str, Any]]]:
         """Convert internal message format to API-specific format.
 
         Args:
