@@ -2,6 +2,7 @@
 
 import logging
 from typing import Any
+import httpx
 
 import anthropic
 
@@ -26,6 +27,7 @@ class AnthropicClient(LLMClientBase):
         api_key: str,
         api_base: str = "https://api.minimaxi.com/anthropic",
         model: str = "MiniMax-M2.5",
+        ssl_verify: bool = True,
         retry_config: RetryConfig | None = None,
     ):
         """Initialize Anthropic client.
@@ -43,6 +45,7 @@ class AnthropicClient(LLMClientBase):
             base_url=api_base,
             api_key=api_key,
             default_headers={"Authorization": f"Bearer {api_key}"},
+            http_client = httpx.AsyncClient(verify=ssl_verify),
         )
 
     async def _make_api_request(

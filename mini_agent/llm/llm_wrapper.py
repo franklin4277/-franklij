@@ -39,6 +39,7 @@ class LLMClient:
         provider: LLMProvider = LLMProvider.ANTHROPIC,
         api_base: str = "https://api.minimaxi.com",
         model: str = "MiniMax-M2.5",
+        ssl_verify: bool = True,
         retry_config: RetryConfig | None = None,
     ):
         """Initialize LLM client with specified provider.
@@ -86,6 +87,7 @@ class LLMClient:
                 api_key=api_key,
                 api_base=full_api_base,
                 model=model,
+                ssl_verify=ssl_verify,
                 retry_config=retry_config,
             )
         elif provider == LLMProvider.OPENAI:
@@ -93,6 +95,7 @@ class LLMClient:
                 api_key=api_key,
                 api_base=full_api_base,
                 model=model,
+                ssl_verify=ssl_verify,
                 retry_config=retry_config,
             )
         else:

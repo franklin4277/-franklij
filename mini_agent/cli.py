@@ -563,6 +563,7 @@ async def run_agent(workspace_dir: Path, task: str = None):
         provider=provider,
         api_base=config.llm.api_base,
         model=config.llm.model,
+        ssl_verify=config.llm.ssl_verify,
         retry_config=retry_config if config.llm.retry.enabled else None,
     )
 

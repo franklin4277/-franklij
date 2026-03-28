@@ -3,6 +3,7 @@
 import json
 import logging
 from typing import Any
+import httpx
 
 from openai import AsyncOpenAI
 
@@ -27,6 +28,7 @@ class OpenAIClient(LLMClientBase):
         api_key: str,
         api_base: str = "https://api.minimaxi.com/v1",
         model: str = "MiniMax-M2.5",
+        ssl_verify: bool = True,
         retry_config: RetryConfig | None = None,
     ):
         """Initialize OpenAI client.
@@ -43,6 +45,7 @@ class OpenAIClient(LLMClientBase):
         self.client = AsyncOpenAI(
             api_key=api_key,
             base_url=api_base,
+            http_client=httpx.AsyncClient(verify=ssl_verify),
         )
 
     async def _make_api_request(
