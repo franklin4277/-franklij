@@ -26,6 +26,7 @@ async def test_wrapper_anthropic_provider():
         provider=LLMProvider.ANTHROPIC,
         api_base=config.get("api_base"),
         model=config.get("model"),
+        ssl_verify=config.get("ssl_verify"),
     )
 
     assert client.provider == LLMProvider.ANTHROPIC

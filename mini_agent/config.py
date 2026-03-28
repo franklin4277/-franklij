@@ -26,6 +26,7 @@ class LLMConfig(BaseModel):
     api_base: str = "https://api.minimax.io"
     model: str = "MiniMax-M2.5"
     provider: str = "anthropic"  # "anthropic" or "openai"
+    ssl_verify: bool = True
     retry: RetryConfig = Field(default_factory=RetryConfig)
 
 
@@ -125,6 +126,7 @@ class Config(BaseModel):
             api_base=data.get("api_base", "https://api.minimax.io"),
             model=data.get("model", "MiniMax-M2.5"),
             provider=data.get("provider", "anthropic"),
+            ssl_verify=data.get("verify", True),
             retry=retry_config,
         )
 

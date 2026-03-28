@@ -37,6 +37,7 @@ async def test_agent_simple_task():
             api_key=config.llm.api_key,
             api_base=config.llm.api_base,
             model=config.llm.model,
+            ssl_verify=config.llm.ssl_verify,
         )
 
         # Initialize tools
@@ -119,6 +120,7 @@ async def test_agent_bash_task():
             api_key=config.llm.api_key,
             api_base=config.llm.api_base,
             model=config.llm.model,
+            ssl_verify=config.llm.ssl_verify,
         )
 
         # Initialize tools
