@@ -24,6 +24,29 @@
                 "@modelcontextprotocol/server-memory"
             ],
             "disabled": true
+        },
+        "minimax-coding-plan-mcp": {
+            "command": "uvx",
+            "args": ["minimax-coding-plan-mcp"],
+            "env": {
+                "MINIMAX_API_KEY": "<YOUR_MINIMAX_API_KEY>",
+                "MINIMAX_MCP_BASE_PATH": "<Local directory path for output, keep it writable>",
+                "MINIMAX_API_HOST": "API Host, https://api.minimaxi.com or https://api.minimax.io",
+                "MINIMAX_API_RESOURCE_MODE": "<[Optional] Resource access mode after generation: url or local, Default: url>"
+            },
+            "disabled": true
+        },
+        "minimax-mcp": {
+            "command": "uvx",
+            "args": ["minimax-mcp"],
+            "env": {
+                "MINIMAX_API_KEY": "<YOUR_MINIMAX_API_KEY>",
+                "MINIMAX_MCP_BASE_PATH": "<Local directory path for output, keep it writable>",
+                "MINIMAX_API_HOST": "API Host, https://api.minimaxi.com or https://api.minimax.io",
+                "MINIMAX_API_RESOURCE_MODE": "<[Optional] Resource access mode after generation: url or local, Default: url>"
+            },
+            "transport": "<[Optional] Transport method: studio or SSE, Default: studio>",
+            "disabled": true
         }
     }
 }

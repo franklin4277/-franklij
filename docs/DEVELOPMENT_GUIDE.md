@@ -10,6 +10,8 @@
     - [2.2 Integrated MCP Tools](#22-integrated-mcp-tools)
       - [Memory - Knowledge Graph Memory System](#memory---knowledge-graph-memory-system)
       - [MiniMax Search - Web Search and Browse](#minimax-search---web-search-and-browse)
+      - [Token Plan MCP - Helping developers quickly access information and understand image content during coding](#token-plan-mcp---helping-developers-quickly-access-information-and-understand-image-content-during-coding)
+      - [MiniMax MCP - Supporting multimodal capabilities such as text-to-speech (TTS), voice cloning, image generation, and video generation](#minimax-mcp---supporting-multimodal-capabilities-such-as-text-to-speech-tts-voice-cloning-image-generation-and-video-generation)
   - [3. Extended Abilities](#3-extended-abilities)
     - [3.1 Adding Custom Tools](#31-adding-custom-tools)
       - [Steps](#steps)
@@ -103,6 +105,71 @@ This project comes with pre-configured MCP (Model Context Protocol) tools that e
         "SERPER_API_KEY": "your-serper-api-key",
         "MINIMAX_TOKEN": "your-minimax-token"
       }
+    }
+  }
+}
+```
+
+---
+
+#### [Token Plan MCP - Helping developers quickly access information and understand image content during coding](https://platform.minimax.io/docs/guides/token-plan-mcp-guide)
+
+**Function**: Provides ten powerful tools:
+- `web_search` - Performs web searches based on search queries, returning search results and related suggestions.
+- `understand_image` - Performs image understanding and analysis, supporting multiple image input methods.
+
+**Status**: Disabled by default, needs configuration to enable
+
+**Configuration Example**
+
+```json
+{
+  "mcpServers": {
+    "minimax-coding-plan-mcp": {
+      "disabled": false,
+      "env": {
+        "MINIMAX_API_KEY": "Enter your API key",
+        "MINIMAX_MCP_BASE_PATH": "Local output directory path, ensure the path exists and is writable",
+        "MINIMAX_API_HOST": "https://api.minimax.io",
+        "MINIMAX_API_RESOURCE_MODE": "Optional. Resource delivery method: url or local, default url"
+      }
+    }
+  }
+}
+```
+
+---
+
+#### [MiniMax MCP - Supporting multimodal capabilities such as text-to-speech (TTS), voice cloning, image generation, and video generation](https://platform.minimax.io/docs/guides/mcp-guide)
+
+**Function**: Provides ten powerful tools:
+- `text_to_audio` - This tool converts the text to natural and fluent speech.
+- `list_voices` - This tool lists all available voices.
+- `voice_clone` - This tool clones a voice from a specified audio file.
+- `voice_design` - This tool generates a voice and preview audio from a prompt.
+- `play_audio` - This tool plays an audio file.
+- `music_generation` - This tool generates music from a prompt and lyrics.
+- `generate_video` - Generates a video based on a prompt. At least one of `prompt` or `first_frame_image` in the parameters is required.
+- `image_to_video` - Generates a video from a first-frame image. At least one of `prompt` or `first_frame_image` in the parameters is required. Only available in the **JavaScript/TypeScript** MCP version.
+- `query_video_generation` - Queries the status of an asynchronous video generation task.
+- `text_to_image` - Generates images from a text prompt.
+
+**Status**: Disabled by default, needs configuration to enable
+
+**Configuration Example**
+
+```json
+{
+  "mcpServers": {
+    "minimax-mcp": {
+      "disabled": false,
+      "env": {
+        "MINIMAX_API_KEY": "Enter your API key",
+        "MINIMAX_MCP_BASE_PATH": "Local output directory path, e.g., /User/xxx/Desktop",
+        "MINIMAX_API_HOST": "https://api.minimax.io",
+        "MINIMAX_API_RESOURCE_MODE": "Optional. Specifies how generated resources are exposed. Options: [url | local]. Default: url"
+      },
+      "transport": "Optional: transport mode. Options: [studio|SSE], default: studio"
     }
   }
 }

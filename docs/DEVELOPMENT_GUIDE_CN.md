@@ -11,6 +11,8 @@
     - [2.2 已集成的 MCP 工具](#22-已集成的-mcp-工具)
       - [Memory - 知识图谱记忆系统](#memory---知识图谱记忆系统)
       - [MiniMax Search - 网页搜索与浏览](#minimax-search---网页搜索与浏览)
+      - [Token Plan MCP - 网页搜索与图片理解和分析](#token-plan-mcp---网页搜索与图片理解和分析)
+      - [MiniMax MCP - 语音合成、音色克隆、图像与视频生成等多模态能力](#minimax-mcp---语音合成音色克隆图像与视频生成等多模态能力)
   - [3. 扩展能力](#3-扩展能力)
     - [3.1 添加自定义工具](#31-添加自定义工具)
       - [步骤](#步骤)
@@ -104,6 +106,71 @@ mini-agent/
         "SERPER_API_KEY": "your-serper-api-key",
         "MINIMAX_API_KEY": "your-minimax-token"
       }
+    }
+  }
+}
+```
+
+---
+
+#### [Token Plan MCP - 网页搜索与图片理解和分析](https://platform.minimaxi.com/docs/guides/token-plan-mcp-guide#web-search)
+
+**功能**：提供两大强大工具：
+- `web_search` - 根据搜索查询词进行网络搜索，返回搜索结果和相关搜索建议。
+- `understand_image` - 对图片进行理解和分析，支持多种图片输入方式。
+
+**状态**：默认禁用，需要配置 API Key 后方可启用。
+
+**配置示例**：
+
+```json
+{
+  "mcpServers": {
+    "MiniMax": {
+      "disabled": false,
+      "env": {
+        "MINIMAX_API_KEY": "填写你的API密钥",
+        "MINIMAX_MCP_BASE_PATH": "本地输出目录路径，需保证路径存在且有写入权限",
+        "MINIMAX_API_HOST": "https://api.minimaxi.com",
+        "MINIMAX_API_RESOURCE_MODE": "可选，资源提供方式：url 或 local，默认 url"
+      }
+    }
+  }
+}
+```
+
+---
+
+#### [MiniMax MCP - 语音合成、音色克隆、图像与视频生成等多模态能力](https://platform.minimaxi.com/docs/guides/mcp-guide)
+
+**功能**：提供十大强大工具：
+- `text_to_audio` - 该工具可将将输入的文本合成为自然流畅的语音
+- `list_voices` - 该工具可查询所有可用音色
+- `voice_clone` - 该工具可根据指定音频文件克隆音色
+- `voice_design` - 该工具可根据指定提示词生成音色和试听文本
+- `play_audio` - 该工具用于播放一个音频文件
+- `music_generation` - 该工具可根据指定提示词和歌词生成音乐
+- `generate_video` - 该工具可根据指定文本或图片进行视频生成生成
+- `image_to_video` - 该工具用于使用首帧图像生成视频
+- `query_video_generation` - 该工具用于查询异步视频生成任务的状态
+- `text_to_image` - 该工具可根据指定提示词生成图片
+
+**状态**：默认禁用，需要配置 API Key 后方可启用。
+
+**配置示例**：
+
+```json
+{
+  "mcpServers": {
+    "MiniMax": {
+      "disabled": false,
+      "env": {
+        "MINIMAX_API_KEY": "填写你的API密钥",
+        "MINIMAX_MCP_BASE_PATH": "本地输出目录路径，如/User/xxx/Desktop",
+        "MINIMAX_API_HOST": "填写API Host, https://api.minimaxi.com 或 https://api.minimax.io",
+        "MINIMAX_API_RESOURCE_MODE": "可选配置，资源生成后的提供方式, 可选项为 [url|local], 默认为 url"
+      },
+      "transport": "可选配置，传输方式，可选项为 [studio|SSE]，默认为 studio"
     }
   }
 }
