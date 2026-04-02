@@ -434,7 +434,8 @@ Requirements:
                 step_elapsed = perf_counter() - step_start_time
                 total_elapsed = perf_counter() - run_start_time
                 print(f"\n{Colors.DIM}⏱️  Step {step + 1} completed in {step_elapsed:.2f}s (total: {total_elapsed:.2f}s){Colors.RESET}")
-                return response.content
+                # Return content or thinking or empty string if neither exists
+                return response.content if response.content else (response.thinking if response.thinking else "")
 
             # Check for cancellation before executing tools
             if self._check_cancelled():
