@@ -141,10 +141,19 @@ class Agent:
             elif isinstance(msg.content, list):
                 for block in msg.content:
                     if isinstance(block, dict):
-                        # Convert dict to string for calculation
-                        total_tokens += len(encoding.encode(str(block)))
+                        # Extract actual text content from content blocks
+                        # to avoid over-estimating token count
+                        block_type = block.get("type", "")
+                        if block_type == "text" and "text" in block:
+                            total_tokens += len(encoding.encode(block["text"]))
+                        elif block_type == "thinking" and "thinking" in block:
+                            # Thinking blocks are counted separately below
+                            pass
+                        else:
+                            # For other block types (tool_use, etc.), encode the whole block
+                            total_tokens += len(encoding.encode(str(block)))
 
-            # Count thinking
+            # Count thinking (only from field, not from content blocks to avoid double-counting)
             if msg.thinking:
                 total_tokens += len(encoding.encode(msg.thinking))
 
@@ -166,7 +175,14 @@ class Agent:
             elif isinstance(msg.content, list):
                 for block in msg.content:
                     if isinstance(block, dict):
-                        total_chars += len(str(block))
+                        block_type = block.get("type", "")
+                        if block_type == "text" and "text" in block:
+                            total_chars += len(block["text"])
+                        elif block_type == "thinking" and "thinking" in block:
+                            # Thinking blocks are counted separately below
+                            pass
+                        else:
+                            total_chars += len(str(block))
 
             if msg.thinking:
                 total_chars += len(msg.thinking)
@@ -418,7 +434,8 @@ Requirements:
                 step_elapsed = perf_counter() - step_start_time
                 total_elapsed = perf_counter() - run_start_time
                 print(f"\n{Colors.DIM}⏱️  Step {step + 1} completed in {step_elapsed:.2f}s (total: {total_elapsed:.2f}s){Colors.RESET}")
-                return response.content
+                # Return content or thinking or empty string if neither exists
+                return response.content if response.content else (response.thinking if response.thinking else "")
 
             # Check for cancellation before executing tools
             if self._check_cancelled():
