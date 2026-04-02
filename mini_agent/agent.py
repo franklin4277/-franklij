@@ -141,10 +141,19 @@ class Agent:
             elif isinstance(msg.content, list):
                 for block in msg.content:
                     if isinstance(block, dict):
-                        # Convert dict to string for calculation
-                        total_tokens += len(encoding.encode(str(block)))
+                        # Extract actual text content from content blocks
+                        # to avoid over-estimating token count
+                        block_type = block.get("type", "")
+                        if block_type == "text" and "text" in block:
+                            total_tokens += len(encoding.encode(block["text"]))
+                        elif block_type == "thinking" and "thinking" in block:
+                            # Thinking blocks are counted separately below
+                            pass
+                        else:
+                            # For other block types (tool_use, etc.), encode the whole block
+                            total_tokens += len(encoding.encode(str(block)))
 
-            # Count thinking
+            # Count thinking (only from field, not from content blocks to avoid double-counting)
             if msg.thinking:
                 total_tokens += len(encoding.encode(msg.thinking))
 
@@ -166,7 +175,14 @@ class Agent:
             elif isinstance(msg.content, list):
                 for block in msg.content:
                     if isinstance(block, dict):
-                        total_chars += len(str(block))
+                        block_type = block.get("type", "")
+                        if block_type == "text" and "text" in block:
+                            total_chars += len(block["text"])
+                        elif block_type == "thinking" and "thinking" in block:
+                            # Thinking blocks are counted separately below
+                            pass
+                        else:
+                            total_chars += len(str(block))
 
             if msg.thinking:
                 total_chars += len(msg.thinking)
