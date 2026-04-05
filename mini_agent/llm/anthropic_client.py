@@ -1,12 +1,13 @@
 """Anthropic LLM client implementation."""
 
+import json
 import logging
-from typing import Any
+from typing import Any, AsyncIterator
 
 import anthropic
 
 from ..retry import RetryConfig, async_retry
-from ..schema import FunctionCall, LLMResponse, Message, TokenUsage, ToolCall
+from ..schema import FunctionCall, LLMResponse, Message, StreamChunk, TokenUsage, ToolCall
 from .base import LLMClientBase
 
 logger = logging.getLogger(__name__)
@@ -291,3 +292,113 @@ class AnthropicClient(LLMClientBase):
 
         # Parse and return response
         return self._parse_response(response)
+
+    async def generate_stream(
+        self,
+        messages: list[Message],
+        tools: list[Any] | None = None,
+    ) -> AsyncIterator[StreamChunk]:
+        """Stream LLM response as async iterator of chunks.
+
+        Args:
+            messages: List of conversation messages
+            tools: Optional list of available tools
+
+        Yields:
+            StreamChunk objects representing partial response
+        """
+        system_message, api_messages = self._convert_messages(messages)
+        params: dict[str, Any] = {
+            "model": self.model,
+            "max_tokens": 16384,
+            "messages": api_messages,
+        }
+
+        if system_message:
+            params["system"] = system_message
+        if tools:
+            params["tools"] = self._convert_tools(tools)
+
+        # Buffer for partial tool calls (indexed by block index).
+        # Note: MiniMax sends both top-level text/thinking events AND
+        # content_block_delta events — we use top-level events for text/thinking
+        # (they arrive first with full content) and content_block_delta only for tool_use.
+        tool_call_buffer: dict[int, dict[str, Any]] = {}
+
+        async with self.client.messages.stream(**params) as stream:
+            async for event in stream:
+                # Top-level event types: these arrive BEFORE content_block_delta
+                # and carry the complete content for each block. Skip content_block_delta
+                # for text/thinking to avoid double-yielding.
+                if event.type == "text":
+                    yield StreamChunk(type="content", text=event.text)
+                    continue
+                elif event.type == "thinking":
+                    yield StreamChunk(type="thinking", text=event.thinking)
+                    continue
+                elif event.type == "signature":
+                    # Signature events don't contain content to stream
+                    continue
+
+                # Handle content_block_start (buffer setup for tool calls;
+                # text/thinking blocks are handled via top-level events above)
+                if hasattr(event, "content_block") and event.type == "content_block_start":
+                    block = event.content_block
+                    idx = event.index
+                    if block.type == "tool_use":
+                        tool_call_buffer[idx] = {
+                            "type": "tool_use",
+                            "id": block.id,
+                            "name": block.name,
+                            "input": "",
+                        }
+                    continue
+
+                # Handle content_block_delta (only for tool_use; text/thinking
+                # deltas are skipped since top-level events already yielded the full content)
+                if hasattr(event, "content_block") and event.type == "content_block_delta":
+                    block = event.content_block
+                    idx = event.index
+                    delta = block.delta
+                    if block.type == "tool_use":
+                        if hasattr(delta, "input"):
+                            tool_call_buffer[idx]["input"] += delta.input
+                        # Check if tool call is complete by trying to parse
+                        args_str = tool_call_buffer[idx]["input"]
+                        try:
+                            parsed = json.loads(args_str) if args_str else {}
+                            yield StreamChunk(
+                                type="tool_call_complete",
+                                tool_call=ToolCall(
+                                    id=tool_call_buffer[idx]["id"],
+                                    type="function",
+                                    function=FunctionCall(
+                                        name=tool_call_buffer[idx]["name"],
+                                        arguments=parsed,
+                                    ),
+                                ),
+                            )
+                            del tool_call_buffer[idx]
+                        except json.JSONDecodeError:
+                            yield StreamChunk(
+                                type="tool_call_delta",
+                                tool_call_id=tool_call_buffer[idx]["id"],
+                                arguments=args_str,
+                            )
+                    continue
+
+                # Handle message_delta (final)
+                elif event.type == "message_delta":
+                    if hasattr(event, "usage") and event.usage:
+                        output_tokens = event.usage.output_tokens or 0
+                        yield StreamChunk(
+                            type="done",
+                            finish_reason=getattr(event, "stop_reason", None) or "stop",
+                            usage=TokenUsage(
+                                prompt_tokens=0,
+                                completion_tokens=output_tokens,
+                                total_tokens=output_tokens,
+                            ),
+                        )
+                    elif hasattr(event, "stop_reason"):
+                        yield StreamChunk(type="done", finish_reason=getattr(event, "stop_reason", None) or "stop")
