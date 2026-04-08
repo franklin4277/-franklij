@@ -1,12 +1,13 @@
 """Anthropic LLM client implementation."""
 
+import json
 import logging
-from typing import Any
+from typing import Any, AsyncIterator
 
 import anthropic
 
 from ..retry import RetryConfig, async_retry
-from ..schema import FunctionCall, LLMResponse, Message, TokenUsage, ToolCall
+from ..schema import FunctionCall, LLMResponse, Message, StreamChunk, TokenUsage, ToolCall
 from .base import LLMClientBase
 
 logger = logging.getLogger(__name__)
@@ -291,3 +292,116 @@ class AnthropicClient(LLMClientBase):
 
         # Parse and return response
         return self._parse_response(response)
+
+    async def generate_stream(
+        self,
+        messages: list[Message],
+        tools: list[Any] | None = None,
+    ) -> AsyncIterator[StreamChunk]:
+        """Stream LLM response as async iterator of chunks.
+
+        Args:
+            messages: List of conversation messages
+            tools: Optional list of available tools
+
+        Yields:
+            StreamChunk objects representing partial response
+        """
+        system_message, api_messages = self._convert_messages(messages)
+        params: dict[str, Any] = {
+            "model": self.model,
+            "max_tokens": 16384,
+            "messages": api_messages,
+        }
+
+        if system_message:
+            params["system"] = system_message
+        if tools:
+            params["tools"] = self._convert_tools(tools)
+
+        # Buffer for partial tool calls (indexed by block index).
+        # Note: MiniMax sends:
+        # - Top-level "text" / "thinking" events for content (complete, not delta)
+        # - "input_json" events for tool argument streaming
+        # - "content_block_stop" when a block (including tool_use) ends
+        tool_call_buffer: dict[int, dict[str, Any]] = {}
+
+        async with self.client.messages.stream(**params) as stream:
+            async for event in stream:
+                # Top-level text/thinking — complete content, yield immediately
+                if event.type == "text":
+                    yield StreamChunk(type="content", text=event.text)
+                    continue
+                elif event.type == "thinking":
+                    yield StreamChunk(type="thinking", text=event.thinking)
+                    continue
+                elif event.type == "signature":
+                    continue
+
+                # Handle content_block_start — buffer setup for tool_use
+                if hasattr(event, "content_block") and event.type == "content_block_start":
+                    block = event.content_block
+                    idx = event.index
+                    if block.type == "tool_use":
+                        tool_call_buffer[idx] = {
+                            "type": "tool_use",
+                            "id": block.id,
+                            "name": block.name,
+                            "input": "",
+                        }
+                    continue
+
+                # Handle input_json — streaming JSON arguments for tool_use blocks
+                # MiniMax API uses input_json events with partial_json field for args
+                if event.type == "input_json":
+                    if not tool_call_buffer:
+                        continue
+                    idx = max(tool_call_buffer.keys())
+                    # partial_json contains the accumulated JSON string so far
+                    partial = getattr(event, "partial_json", "") or ""
+                    if partial:
+                        tool_call_buffer[idx]["input"] = partial
+                        try:
+                            parsed = json.loads(partial) if partial else {}
+                            yield StreamChunk(
+                                type="tool_call_complete",
+                                tool_call=ToolCall(
+                                    id=tool_call_buffer[idx]["id"],
+                                    type="function",
+                                    function=FunctionCall(
+                                        name=tool_call_buffer[idx]["name"],
+                                        arguments=parsed,
+                                    ),
+                                ),
+                            )
+                            del tool_call_buffer[idx]
+                        except json.JSONDecodeError:
+                            yield StreamChunk(
+                                type="tool_call_delta",
+                                tool_call_id=tool_call_buffer[idx]["id"],
+                                arguments=partial,
+                            )
+                    continue
+
+                # Handle content_block_stop — clean up any remaining incomplete tool calls
+                if event.type == "content_block_stop":
+                    # Clear buffer for blocks that weren't completed via input_json
+                    # (they should have been completed already, but clean up just in case)
+                    tool_call_buffer.clear()
+                    continue
+
+                # Handle message_delta (final)
+                elif event.type == "message_delta":
+                    if hasattr(event, "usage") and event.usage:
+                        output_tokens = event.usage.output_tokens or 0
+                        yield StreamChunk(
+                            type="done",
+                            finish_reason=getattr(event, "stop_reason", None) or "stop",
+                            usage=TokenUsage(
+                                prompt_tokens=0,
+                                completion_tokens=output_tokens,
+                                total_tokens=output_tokens,
+                            ),
+                        )
+                    elif hasattr(event, "stop_reason"):
+                        yield StreamChunk(type="done", finish_reason=getattr(event, "stop_reason", None) or "stop")

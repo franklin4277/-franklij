@@ -37,7 +37,13 @@ from mini_agent.tools.file_tools import EditTool, ReadTool, WriteTool
 from mini_agent.tools.mcp_loader import cleanup_mcp_connections, load_mcp_tools_async, set_mcp_timeout_config
 from mini_agent.tools.note_tool import SessionNoteTool
 from mini_agent.tools.skill_tool import create_skill_tools
+from mini_agent.tools.subagent_tool import SubAgentTool
 from mini_agent.utils import calculate_display_width
+
+# Force unbuffered stdout for real-time streaming output
+# Must be done before any print statements
+sys.stdout.reconfigure(line_buffering=False)
+sys.stderr.reconfigure(line_buffering=False)
 
 
 # ANSI color codes
@@ -314,6 +320,12 @@ Examples:
         help="Execute a task non-interactively and exit",
     )
     parser.add_argument(
+        "--no-stream",
+        action="store_true",
+        default=False,
+        help="Disable streaming output (use non-streaming generate)",
+    )
+    parser.add_argument(
         "--version",
         "-v",
         action="version",
@@ -483,7 +495,7 @@ async def _quiet_cleanup():
         pass
 
 
-async def run_agent(workspace_dir: Path, task: str = None):
+async def run_agent(workspace_dir: Path, task: str = None, stream: bool = True):
     """Run Agent in interactive or non-interactive mode.
 
     Args:
@@ -577,6 +589,12 @@ async def run_agent(workspace_dir: Path, task: str = None):
     # 4. Add workspace-dependent tools
     add_workspace_tools(tools, config, workspace_dir)
 
+    # 4.5. Create SubAgent tool and bind it to the agent after creation
+    subagent_tool = SubAgentTool(
+        llm_client=llm_client,
+        workspace_dir=str(workspace_dir),
+    )
+
     # 5. Load System Prompt (with priority search)
     system_prompt_path = Config.find_config_file(config.agent.system_prompt_path)
     if system_prompt_path and system_prompt_path.exists():
@@ -601,13 +619,17 @@ async def run_agent(workspace_dir: Path, task: str = None):
         system_prompt = system_prompt.replace("{SKILLS_METADATA}", "")
 
     # 7. Create Agent
+    tools.append(subagent_tool)
     agent = Agent(
         llm_client=llm_client,
         system_prompt=system_prompt,
         tools=tools,
         max_steps=config.agent.max_steps,
         workspace_dir=str(workspace_dir),
+        stream=stream,
     )
+    # Bind subagent tool to the agent so it can access the parent's tool set
+    subagent_tool.bind_agent(agent)
 
     # 8. Display welcome information
     if not task:
@@ -866,7 +888,7 @@ def main():
     workspace_dir.mkdir(parents=True, exist_ok=True)
 
     # Run the agent (config always loaded from package directory)
-    asyncio.run(run_agent(workspace_dir, task=args.task))
+    asyncio.run(run_agent(workspace_dir, task=args.task, stream=not args.no_stream))
 
 
 if __name__ == "__main__":
