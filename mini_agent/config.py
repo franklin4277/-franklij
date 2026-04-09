@@ -27,6 +27,7 @@ class LLMConfig(BaseModel):
     model: str = "MiniMax-M2.5"
     provider: str = "anthropic"  # "anthropic" or "openai"
     retry: RetryConfig = Field(default_factory=RetryConfig)
+    enable_streaming: bool = False  # Enable streaming responses
 
 
 class AgentConfig(BaseModel):
@@ -75,7 +76,9 @@ class Config(BaseModel):
         """Load configuration from the default search path."""
         config_path = cls.get_default_config_path()
         if not config_path.exists():
-            raise FileNotFoundError("Configuration file not found. Run scripts/setup-config.sh or place config.yaml in mini_agent/config/.")
+            raise FileNotFoundError(
+                "Configuration file not found. Run scripts/setup-config.sh or place config.yaml in mini_agent/config/."
+            )
         return cls.from_yaml(config_path)
 
     @classmethod
@@ -126,6 +129,7 @@ class Config(BaseModel):
             model=data.get("model", "MiniMax-M2.5"),
             provider=data.get("provider", "anthropic"),
             retry=retry_config,
+            enable_streaming=data.get("enable_streaming", False),
         )
 
         # Parse Agent configuration

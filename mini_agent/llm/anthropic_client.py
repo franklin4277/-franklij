@@ -1,7 +1,7 @@
 """Anthropic LLM client implementation."""
 
 import logging
-from typing import Any
+from typing import Any, AsyncGenerator
 
 import anthropic
 
@@ -111,7 +111,9 @@ class AnthropicClient(LLMClientBase):
                 raise TypeError(f"Unsupported tool type: {type(tool)}")
         return result
 
-    def _convert_messages(self, messages: list[Message]) -> tuple[str | None, list[dict[str, Any]]]:
+    def _convert_messages(
+        self, messages: list[Message]
+    ) -> tuple[str | None, list[dict[str, Any]]]:
         """Convert internal messages to Anthropic format.
 
         Args:
@@ -137,7 +139,9 @@ class AnthropicClient(LLMClientBase):
 
                     # Add thinking block if present
                     if msg.thinking:
-                        content_blocks.append({"type": "thinking", "thinking": msg.thinking})
+                        content_blocks.append(
+                            {"type": "thinking", "thinking": msg.thinking}
+                        )
 
                     # Add text content if present
                     if msg.content:
@@ -155,7 +159,9 @@ class AnthropicClient(LLMClientBase):
                                 }
                             )
 
-                    api_messages.append({"role": "assistant", "content": content_blocks})
+                    api_messages.append(
+                        {"role": "assistant", "content": content_blocks}
+                    )
                 else:
                     api_messages.append({"role": msg.role, "content": msg.content})
 
@@ -237,9 +243,15 @@ class AnthropicClient(LLMClientBase):
         if hasattr(response, "usage") and response.usage:
             input_tokens = response.usage.input_tokens or 0
             output_tokens = response.usage.output_tokens or 0
-            cache_read_tokens = getattr(response.usage, "cache_read_input_tokens", 0) or 0
-            cache_creation_tokens = getattr(response.usage, "cache_creation_input_tokens", 0) or 0
-            total_input_tokens = input_tokens + cache_read_tokens + cache_creation_tokens
+            cache_read_tokens = (
+                getattr(response.usage, "cache_read_input_tokens", 0) or 0
+            )
+            cache_creation_tokens = (
+                getattr(response.usage, "cache_creation_input_tokens", 0) or 0
+            )
+            total_input_tokens = (
+                input_tokens + cache_read_tokens + cache_creation_tokens
+            )
             usage = TokenUsage(
                 prompt_tokens=total_input_tokens,
                 completion_tokens=output_tokens,
@@ -274,7 +286,9 @@ class AnthropicClient(LLMClientBase):
         # Make API request with retry logic
         if self.retry_config.enabled:
             # Apply retry logic
-            retry_decorator = async_retry(config=self.retry_config, on_retry=self.retry_callback)
+            retry_decorator = async_retry(
+                config=self.retry_config, on_retry=self.retry_callback
+            )
             api_call = retry_decorator(self._make_api_request)
             response = await api_call(
                 request_params["system_message"],
@@ -291,3 +305,154 @@ class AnthropicClient(LLMClientBase):
 
         # Parse and return response
         return self._parse_response(response)
+
+    async def stream_generate(
+        self,
+        messages: list[Message],
+        tools: list[Any] | None = None,
+    ) -> AsyncGenerator[LLMResponse, None]:
+        """Stream response from Anthropic LLM.
+
+        Yields partial LLMResponse objects as content arrives.
+
+        Args:
+            messages: List of conversation messages
+            tools: Optional list of Tool objects or dicts
+
+        Yields:
+            LLMResponse containing partial/generated content, thinking, and tool calls
+        """
+        request_params = self._prepare_request(messages, tools)
+
+        params = {
+            "model": self.model,
+            "max_tokens": 16384,
+            "messages": request_params["api_messages"],
+        }
+
+        if request_params["system_message"]:
+            params["system"] = request_params["system_message"]
+
+        if tools:
+            params["tools"] = self._convert_tools(tools)
+
+        accumulated_text = ""
+        accumulated_thinking = ""
+        accumulated_tool_calls: list[ToolCall] = []
+        pending_tool_call: dict[str, Any] | None = None
+
+        async with self.client.messages.stream(**params) as stream:
+            async for event in stream:
+                if event.type == "content_block_delta":
+                    if event.delta.type == "thinking_delta":
+                        accumulated_thinking += event.delta.thinking
+                        yield LLMResponse(
+                            content=accumulated_text,
+                            thinking=accumulated_thinking
+                            if accumulated_thinking
+                            else None,
+                            tool_calls=accumulated_tool_calls
+                            if accumulated_tool_calls
+                            else None,
+                            finish_reason="",
+                            usage=None,
+                        )
+                    elif event.delta.type == "text_delta":
+                        accumulated_text += event.delta.text
+                        yield LLMResponse(
+                            content=accumulated_text,
+                            thinking=accumulated_thinking
+                            if accumulated_thinking
+                            else None,
+                            tool_calls=accumulated_tool_calls
+                            if accumulated_tool_calls
+                            else None,
+                            finish_reason="",
+                            usage=None,
+                        )
+                elif event.type == "tool_use_delta":
+                    if pending_tool_call is None:
+                        pending_tool_call = {"id": "", "name": "", "input": {}}
+                    if event.delta.name:
+                        pending_tool_call["name"] = event.delta.name
+                    if event.delta.input:
+                        if "input" not in pending_tool_call:
+                            pending_tool_call["input"] = {}
+                        pending_tool_call["input"].update(event.delta.input)
+                elif event.type == "tool_use_block":
+                    if pending_tool_call and pending_tool_call.get("name"):
+                        accumulated_tool_calls.append(
+                            ToolCall(
+                                id=pending_tool_call["id"] or event.content_block.id,
+                                type="function",
+                                function=FunctionCall(
+                                    name=pending_tool_call["name"],
+                                    arguments=pending_tool_call.get("input", {}),
+                                ),
+                            )
+                        )
+                        pending_tool_call = None
+                        yield LLMResponse(
+                            content=accumulated_text,
+                            thinking=accumulated_thinking
+                            if accumulated_thinking
+                            else None,
+                            tool_calls=accumulated_tool_calls
+                            if accumulated_tool_calls
+                            else None,
+                            finish_reason="",
+                            usage=None,
+                        )
+                elif event.type == "message_delta":
+                    if event.delta.stop_reason:
+                        yield LLMResponse(
+                            content=accumulated_text,
+                            thinking=accumulated_thinking
+                            if accumulated_thinking
+                            else None,
+                            tool_calls=accumulated_tool_calls
+                            if accumulated_tool_calls
+                            else None,
+                            finish_reason=event.delta.stop_reason,
+                            usage=None,
+                        )
+
+        if accumulated_tool_calls and pending_tool_call:
+            accumulated_tool_calls.append(
+                ToolCall(
+                    id=pending_tool_call["id"] or "final",
+                    type="function",
+                    function=FunctionCall(
+                        name=pending_tool_call["name"],
+                        arguments=pending_tool_call.get("input", {}),
+                    ),
+                )
+            )
+
+        final_response = await stream.get_final_message()
+        usage = None
+        if final_response.usage:
+            input_tokens = final_response.usage.input_tokens or 0
+            output_tokens = final_response.usage.output_tokens or 0
+            cache_read_tokens = (
+                getattr(final_response.usage, "cache_read_input_tokens", 0) or 0
+            )
+            cache_creation_tokens = (
+                getattr(final_response.usage, "cache_creation_input_tokens", 0) or 0
+            )
+            total_input_tokens = (
+                input_tokens + cache_read_tokens + cache_creation_tokens
+            )
+            usage = TokenUsage(
+                prompt_tokens=total_input_tokens,
+                completion_tokens=output_tokens,
+                total_tokens=total_input_tokens + output_tokens,
+            )
+
+        yield LLMResponse(
+            content=accumulated_text,
+            thinking=accumulated_thinking if accumulated_thinking else None,
+            tool_calls=accumulated_tool_calls if accumulated_tool_calls else None,
+            finish_reason="stop",
+            usage=usage,
+        )

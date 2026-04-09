@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Any
+from typing import Any, AsyncGenerator
 
 from openai import AsyncOpenAI
 
@@ -111,7 +111,9 @@ class OpenAIClient(LLMClientBase):
                 raise TypeError(f"Unsupported tool type: {type(tool)}")
         return result
 
-    def _convert_messages(self, messages: list[Message]) -> tuple[str | None, list[dict[str, Any]]]:
+    def _convert_messages(
+        self, messages: list[Message]
+    ) -> tuple[str | None, list[dict[str, Any]]]:
         """Convert internal messages to OpenAI format.
 
         Args:
@@ -151,7 +153,9 @@ class OpenAIClient(LLMClientBase):
                                 "type": "function",
                                 "function": {
                                     "name": tool_call.function.name,
-                                    "arguments": json.dumps(tool_call.function.arguments),
+                                    "arguments": json.dumps(
+                                        tool_call.function.arguments
+                                    ),
                                 },
                             }
                         )
@@ -278,7 +282,9 @@ class OpenAIClient(LLMClientBase):
         # Make API request with retry logic
         if self.retry_config.enabled:
             # Apply retry logic
-            retry_decorator = async_retry(config=self.retry_config, on_retry=self.retry_callback)
+            retry_decorator = async_retry(
+                config=self.retry_config, on_retry=self.retry_callback
+            )
             api_call = retry_decorator(self._make_api_request)
             response = await api_call(
                 request_params["api_messages"],
@@ -293,3 +299,133 @@ class OpenAIClient(LLMClientBase):
 
         # Parse and return response
         return self._parse_response(response)
+
+    async def stream_generate(
+        self,
+        messages: list[Message],
+        tools: list[Any] | None = None,
+    ) -> AsyncGenerator[LLMResponse, None]:
+        """Stream response from OpenAI LLM.
+
+        Yields partial LLMResponse objects as content arrives.
+
+        Args:
+            messages: List of conversation messages
+            tools: Optional list of Tool objects or dicts
+
+        Yields:
+            LLMResponse containing partial/generated content, thinking, and tool calls
+        """
+        request_params = self._prepare_request(messages, tools)
+
+        params = {
+            "model": self.model,
+            "messages": request_params["api_messages"],
+            "extra_body": {"reasoning_split": True},
+            "stream": True,
+        }
+
+        if tools:
+            params["tools"] = self._convert_tools(tools)
+
+        accumulated_text = ""
+        accumulated_thinking = ""
+        accumulated_tool_calls: list[ToolCall] = []
+        pending_tool_call_id: str | None = None
+        pending_tool_call_name: str | None = None
+        pending_tool_call_arguments = ""
+
+        stream = await self.client.chat.completions.create(**params)
+
+        async for chunk in stream:
+            delta = chunk.choices[0].delta
+
+            if delta.content:
+                accumulated_text += delta.content
+                yield LLMResponse(
+                    content=accumulated_text,
+                    thinking=accumulated_thinking if accumulated_thinking else None,
+                    tool_calls=accumulated_tool_calls
+                    if accumulated_tool_calls
+                    else None,
+                    finish_reason="",
+                    usage=None,
+                )
+
+            if hasattr(delta, "reasoning_details") and delta.reasoning_details:
+                for detail in delta.reasoning_details:
+                    if hasattr(detail, "text"):
+                        accumulated_thinking += detail.text
+                yield LLMResponse(
+                    content=accumulated_text,
+                    thinking=accumulated_thinking if accumulated_thinking else None,
+                    tool_calls=accumulated_tool_calls
+                    if accumulated_tool_calls
+                    else None,
+                    finish_reason="",
+                    usage=None,
+                )
+
+            if delta.tool_calls:
+                for tool_call_delta in delta.tool_calls:
+                    if tool_call_delta.index is not None:
+                        if tool_call_delta.id:
+                            pending_tool_call_id = tool_call_delta.id
+                        if tool_call_delta.function:
+                            if tool_call_delta.function.name:
+                                pending_tool_call_name = tool_call_delta.function.name
+                            if tool_call_delta.function.arguments:
+                                pending_tool_call_arguments += (
+                                    tool_call_delta.function.arguments
+                                )
+
+                            if pending_tool_call_id and pending_tool_call_name:
+                                try:
+                                    arguments = json.loads(pending_tool_call_arguments)
+                                    accumulated_tool_calls.append(
+                                        ToolCall(
+                                            id=pending_tool_call_id,
+                                            type="function",
+                                            function=FunctionCall(
+                                                name=pending_tool_call_name,
+                                                arguments=arguments,
+                                            ),
+                                        )
+                                    )
+                                    pending_tool_call_id = None
+                                    pending_tool_call_name = None
+                                    pending_tool_call_arguments = ""
+                                except json.JSONDecodeError:
+                                    pass
+
+                yield LLMResponse(
+                    content=accumulated_text,
+                    thinking=accumulated_thinking if accumulated_thinking else None,
+                    tool_calls=accumulated_tool_calls
+                    if accumulated_tool_calls
+                    else None,
+                    finish_reason="",
+                    usage=None,
+                )
+
+        final_response = await self.client.chat.completions.create(
+            model=self.model,
+            messages=request_params["api_messages"],
+            extra_body={"reasoning_split": True},
+        )
+
+        usage = None
+        if final_response.usage:
+            usage = TokenUsage(
+                prompt_tokens=final_response.usage.prompt_tokens or 0,
+                completion_tokens=final_response.usage.completion_tokens or 0,
+                total_tokens=final_response.usage.total_tokens or 0,
+            )
+
+        yield LLMResponse(
+            content=accumulated_text,
+            thinking=accumulated_thinking if accumulated_thinking else None,
+            tool_calls=accumulated_tool_calls if accumulated_tool_calls else None,
+            finish_reason="stop",
+            usage=usage,
+        )
