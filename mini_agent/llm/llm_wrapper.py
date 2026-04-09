@@ -98,7 +98,11 @@ class LLMClient:
         else:
             raise ValueError(f"Unsupported provider: {provider}")
 
-        logger.info("Initialized LLM client with provider: %s, api_base: %s", provider, full_api_base)
+        logger.info(
+            "Initialized LLM client with provider: %s, api_base: %s",
+            provider,
+            full_api_base,
+        )
 
     @property
     def retry_callback(self):
@@ -125,3 +129,19 @@ class LLMClient:
             LLMResponse containing the generated content
         """
         return await self._client.generate(messages, tools)
+
+    def stream_generate(
+        self,
+        messages: list[Message],
+        tools: list | None = None,
+    ):
+        """Stream response from LLM as an async generator.
+
+        Args:
+            messages: List of conversation messages
+            tools: Optional list of Tool objects or dicts
+
+        Yields:
+            LLMResponse containing partial/generated content, thinking, and tool calls
+        """
+        return self._client.stream_generate(messages, tools)

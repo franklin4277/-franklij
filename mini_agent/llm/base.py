@@ -1,7 +1,7 @@
 """Base class for LLM clients."""
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, AsyncGenerator
 
 from ..retry import RetryConfig
 from ..schema import LLMResponse, Message
@@ -72,7 +72,9 @@ class LLMClientBase(ABC):
         pass
 
     @abstractmethod
-    def _convert_messages(self, messages: list[Message]) -> tuple[str | None, list[dict[str, Any]]]:
+    def _convert_messages(
+        self, messages: list[Message]
+    ) -> tuple[str | None, list[dict[str, Any]]]:
         """Convert internal message format to API-specific format.
 
         Args:
@@ -80,5 +82,24 @@ class LLMClientBase(ABC):
 
         Returns:
             Tuple of (system_message, api_messages)
+        """
+        pass
+
+    @abstractmethod
+    async def stream_generate(
+        self,
+        messages: list[Message],
+        tools: list[Any] | None = None,
+    ) -> AsyncGenerator[LLMResponse, None]:
+        """Stream response from LLM as an async generator.
+
+        Yields partial LLMResponse objects as content arrives.
+
+        Args:
+            messages: List of conversation messages
+            tools: Optional list of Tool objects or dicts
+
+        Yields:
+            LLMResponse containing partial/generated content, thinking, and tool calls
         """
         pass

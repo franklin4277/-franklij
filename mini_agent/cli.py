@@ -34,7 +34,11 @@ from mini_agent.schema import LLMProvider
 from mini_agent.tools.base import Tool
 from mini_agent.tools.bash_tool import BashKillTool, BashOutputTool, BashTool
 from mini_agent.tools.file_tools import EditTool, ReadTool, WriteTool
-from mini_agent.tools.mcp_loader import cleanup_mcp_connections, load_mcp_tools_async, set_mcp_timeout_config
+from mini_agent.tools.mcp_loader import (
+    cleanup_mcp_connections,
+    load_mcp_tools_async,
+    set_mcp_timeout_config,
+)
 from mini_agent.tools.note_tool import SessionNoteTool
 from mini_agent.tools.skill_tool import create_skill_tools
 from mini_agent.utils import calculate_display_width
@@ -104,14 +108,20 @@ def show_log_directory(open_file_manager: bool = True) -> None:
     log_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
 
     print(f"{Colors.DIM}{'─' * 60}{Colors.RESET}")
-    print(f"{Colors.BOLD}{Colors.BRIGHT_YELLOW}Available Log Files (newest first):{Colors.RESET}")
+    print(
+        f"{Colors.BOLD}{Colors.BRIGHT_YELLOW}Available Log Files (newest first):{Colors.RESET}"
+    )
 
     for i, log_file in enumerate(log_files[:10], 1):
         mtime = datetime.fromtimestamp(log_file.stat().st_mtime)
         size = log_file.stat().st_size
         size_str = f"{size:,}" if size < 1024 else f"{size / 1024:.1f}K"
-        print(f"  {Colors.GREEN}{i:2d}.{Colors.RESET} {Colors.BRIGHT_WHITE}{log_file.name}{Colors.RESET}")
-        print(f"      {Colors.DIM}Modified: {mtime.strftime('%Y-%m-%d %H:%M:%S')}, Size: {size_str}{Colors.RESET}")
+        print(
+            f"  {Colors.GREEN}{i:2d}.{Colors.RESET} {Colors.BRIGHT_WHITE}{log_file.name}{Colors.RESET}"
+        )
+        print(
+            f"      {Colors.DIM}Modified: {mtime.strftime('%Y-%m-%d %H:%M:%S')}, Size: {size_str}{Colors.RESET}"
+        )
 
     if len(log_files) > 10:
         print(f"  {Colors.DIM}... and {len(log_files) - 10} more files{Colors.RESET}")
@@ -137,7 +147,9 @@ def _open_directory_in_file_manager(directory: Path) -> None:
         elif system == "Linux":
             subprocess.run(["xdg-open", str(directory)], check=False)
     except FileNotFoundError:
-        print(f"{Colors.YELLOW}Could not open file manager. Please navigate manually.{Colors.RESET}")
+        print(
+            f"{Colors.YELLOW}Could not open file manager. Please navigate manually.{Colors.RESET}"
+        )
     except Exception as e:
         print(f"{Colors.YELLOW}Error opening file manager: {e}{Colors.RESET}")
 
@@ -171,7 +183,9 @@ def read_log_file(filename: str) -> None:
 def print_banner():
     """Print welcome banner with proper alignment"""
     BOX_WIDTH = 58
-    banner_text = f"{Colors.BOLD}🤖 Mini Agent - Multi-turn Interactive Session{Colors.RESET}"
+    banner_text = (
+        f"{Colors.BOLD}🤖 Mini Agent - Multi-turn Interactive Session{Colors.RESET}"
+    )
     banner_width = calculate_display_width(banner_text)
 
     # Center the text with proper padding
@@ -229,7 +243,9 @@ def print_session_info(agent: Agent, workspace_dir: Path, model: str):
         # Account for leading space
         text_width = calculate_display_width(text)
         padding = max(0, BOX_WIDTH - 1 - text_width)
-        print(f"{Colors.DIM}│{Colors.RESET} {text}{' ' * padding}{Colors.DIM}│{Colors.RESET}")
+        print(
+            f"{Colors.DIM}│{Colors.RESET} {text}{' ' * padding}{Colors.DIM}│{Colors.RESET}"
+        )
 
     # Top border
     print(f"{Colors.DIM}┌{'─' * BOX_WIDTH}┐{Colors.RESET}")
@@ -240,7 +256,9 @@ def print_session_info(agent: Agent, workspace_dir: Path, model: str):
     header_padding_total = BOX_WIDTH - 1 - header_width  # -1 for leading space
     header_padding_left = header_padding_total // 2
     header_padding_right = header_padding_total - header_padding_left
-    print(f"{Colors.DIM}│{Colors.RESET} {' ' * header_padding_left}{header_text}{' ' * header_padding_right}{Colors.DIM}│{Colors.RESET}")
+    print(
+        f"{Colors.DIM}│{Colors.RESET} {' ' * header_padding_left}{header_text}{' ' * header_padding_right}{Colors.DIM}│{Colors.RESET}"
+    )
 
     # Divider
     print(f"{Colors.DIM}├{'─' * BOX_WIDTH}┤{Colors.RESET}")
@@ -254,7 +272,9 @@ def print_session_info(agent: Agent, workspace_dir: Path, model: str):
     # Bottom border
     print(f"{Colors.DIM}└{'─' * BOX_WIDTH}┘{Colors.RESET}")
     print()
-    print(f"{Colors.DIM}Type {Colors.BRIGHT_GREEN}/help{Colors.DIM} for help, {Colors.BRIGHT_GREEN}/exit{Colors.DIM} to quit{Colors.RESET}")
+    print(
+        f"{Colors.DIM}Type {Colors.BRIGHT_GREEN}/help{Colors.DIM} for help, {Colors.BRIGHT_GREEN}/exit{Colors.DIM} to quit{Colors.RESET}"
+    )
     print()
 
 
@@ -274,11 +294,15 @@ def print_stats(agent: Agent, session_start: datetime):
     print(f"  Session Duration: {hours:02d}:{minutes:02d}:{seconds:02d}")
     print(f"  Total Messages: {len(agent.messages)}")
     print(f"    - User Messages: {Colors.BRIGHT_GREEN}{user_msgs}{Colors.RESET}")
-    print(f"    - Assistant Replies: {Colors.BRIGHT_BLUE}{assistant_msgs}{Colors.RESET}")
+    print(
+        f"    - Assistant Replies: {Colors.BRIGHT_BLUE}{assistant_msgs}{Colors.RESET}"
+    )
     print(f"    - Tool Calls: {Colors.BRIGHT_YELLOW}{tool_msgs}{Colors.RESET}")
     print(f"  Available Tools: {len(agent.tools)}")
     if agent.api_total_tokens > 0:
-        print(f"  API Tokens Used: {Colors.BRIGHT_MAGENTA}{agent.api_total_tokens:,}{Colors.RESET}")
+        print(
+            f"  API Tokens Used: {Colors.BRIGHT_MAGENTA}{agent.api_total_tokens:,}{Colors.RESET}"
+        )
     print(f"{Colors.DIM}{'─' * 40}{Colors.RESET}\n")
 
 
@@ -324,7 +348,9 @@ Examples:
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # log subcommand
-    log_parser = subparsers.add_parser("log", help="Show log directory or read log files")
+    log_parser = subparsers.add_parser(
+        "log", help="Show log directory or read log files"
+    )
     log_parser.add_argument(
         "filename",
         nargs="?",
@@ -378,7 +404,8 @@ async def initialize_base_tools(config: Config):
                 search_paths = [
                     skills_path,  # ./skills for backward compatibility
                     Path("mini_agent") / skills_path,  # ./mini_agent/skills
-                    Config.get_package_dir() / skills_path,  # site-packages/mini_agent/skills
+                    Config.get_package_dir()
+                    / skills_path,  # site-packages/mini_agent/skills
                 ]
 
                 # Find first existing path
@@ -419,11 +446,17 @@ async def initialize_base_tools(config: Config):
                 mcp_tools = await load_mcp_tools_async(str(mcp_config_path))
                 if mcp_tools:
                     tools.extend(mcp_tools)
-                    print(f"{Colors.GREEN}✅ Loaded {len(mcp_tools)} MCP tools (from: {mcp_config_path}){Colors.RESET}")
+                    print(
+                        f"{Colors.GREEN}✅ Loaded {len(mcp_tools)} MCP tools (from: {mcp_config_path}){Colors.RESET}"
+                    )
                 else:
-                    print(f"{Colors.YELLOW}⚠️  No available MCP tools found{Colors.RESET}")
+                    print(
+                        f"{Colors.YELLOW}⚠️  No available MCP tools found{Colors.RESET}"
+                    )
             else:
-                print(f"{Colors.YELLOW}⚠️  MCP config file not found: {config.tools.mcp_config_path}{Colors.RESET}")
+                print(
+                    f"{Colors.YELLOW}⚠️  MCP config file not found: {config.tools.mcp_config_path}{Colors.RESET}"
+                )
         except Exception as e:
             print(f"{Colors.YELLOW}⚠️  Failed to load MCP tools: {e}{Colors.RESET}")
 
@@ -459,11 +492,15 @@ def add_workspace_tools(tools: List[Tool], config: Config, workspace_dir: Path):
                 EditTool(workspace_dir=str(workspace_dir)),
             ]
         )
-        print(f"{Colors.GREEN}✅ Loaded file operation tools (workspace: {workspace_dir}){Colors.RESET}")
+        print(
+            f"{Colors.GREEN}✅ Loaded file operation tools (workspace: {workspace_dir}){Colors.RESET}"
+        )
 
     # Session note tool - needs workspace to store memory file
     if config.tools.enable_note:
-        tools.append(SessionNoteTool(memory_file=str(workspace_dir / ".agent_memory.json")))
+        tools.append(
+            SessionNoteTool(memory_file=str(workspace_dir / ".agent_memory.json"))
+        )
         print(f"{Colors.GREEN}✅ Loaded session note tool{Colors.RESET}")
 
 
@@ -499,9 +536,13 @@ async def run_agent(workspace_dir: Path, task: str = None):
         print(f"{Colors.RED}❌ Configuration file not found{Colors.RESET}")
         print()
         print(f"{Colors.BRIGHT_CYAN}📦 Configuration Search Path:{Colors.RESET}")
-        print(f"  {Colors.DIM}1) mini_agent/config/config.yaml{Colors.RESET} (development)")
+        print(
+            f"  {Colors.DIM}1) mini_agent/config/config.yaml{Colors.RESET} (development)"
+        )
         print(f"  {Colors.DIM}2) ~/.mini-agent/config/config.yaml{Colors.RESET} (user)")
-        print(f"  {Colors.DIM}3) <package>/config/config.yaml{Colors.RESET} (installed)")
+        print(
+            f"  {Colors.DIM}3) <package>/config/config.yaml{Colors.RESET} (installed)"
+        )
         print()
         print(f"{Colors.BRIGHT_YELLOW}🚀 Quick Setup (Recommended):{Colors.RESET}")
         print(
@@ -517,22 +558,32 @@ async def run_agent(workspace_dir: Path, task: str = None):
         user_config_dir = Path.home() / ".mini-agent" / "config"
         example_config = Config.get_package_dir() / "config" / "config-example.yaml"
         print(f"  {Colors.DIM}mkdir -p {user_config_dir}{Colors.RESET}")
-        print(f"  {Colors.DIM}cp {example_config} {user_config_dir}/config.yaml{Colors.RESET}")
-        print(f"  {Colors.DIM}# Then edit {user_config_dir}/config.yaml to add your API Key{Colors.RESET}")
+        print(
+            f"  {Colors.DIM}cp {example_config} {user_config_dir}/config.yaml{Colors.RESET}"
+        )
+        print(
+            f"  {Colors.DIM}# Then edit {user_config_dir}/config.yaml to add your API Key{Colors.RESET}"
+        )
         print()
         return
 
     try:
         config = Config.from_yaml(config_path)
     except FileNotFoundError:
-        print(f"{Colors.RED}❌ Error: Configuration file not found: {config_path}{Colors.RESET}")
+        print(
+            f"{Colors.RED}❌ Error: Configuration file not found: {config_path}{Colors.RESET}"
+        )
         return
     except ValueError as e:
         print(f"{Colors.RED}❌ Error: {e}{Colors.RESET}")
-        print(f"{Colors.YELLOW}Please check the configuration file format{Colors.RESET}")
+        print(
+            f"{Colors.YELLOW}Please check the configuration file format{Colors.RESET}"
+        )
         return
     except Exception as e:
-        print(f"{Colors.RED}❌ Error: Failed to load configuration file: {e}{Colors.RESET}")
+        print(
+            f"{Colors.RED}❌ Error: Failed to load configuration file: {e}{Colors.RESET}"
+        )
         return
 
     # 2. Initialize LLM client
@@ -551,12 +602,20 @@ async def run_agent(workspace_dir: Path, task: str = None):
     # Create retry callback function to display retry information in terminal
     def on_retry(exception: Exception, attempt: int):
         """Retry callback function to display retry information"""
-        print(f"\n{Colors.BRIGHT_YELLOW}⚠️  LLM call failed (attempt {attempt}): {str(exception)}{Colors.RESET}")
+        print(
+            f"\n{Colors.BRIGHT_YELLOW}⚠️  LLM call failed (attempt {attempt}): {str(exception)}{Colors.RESET}"
+        )
         next_delay = retry_config.calculate_delay(attempt - 1)
-        print(f"{Colors.DIM}   Retrying in {next_delay:.1f}s (attempt {attempt + 1})...{Colors.RESET}")
+        print(
+            f"{Colors.DIM}   Retrying in {next_delay:.1f}s (attempt {attempt + 1})...{Colors.RESET}"
+        )
 
     # Convert provider string to LLMProvider enum
-    provider = LLMProvider.ANTHROPIC if config.llm.provider.lower() == "anthropic" else LLMProvider.OPENAI
+    provider = (
+        LLMProvider.ANTHROPIC
+        if config.llm.provider.lower() == "anthropic"
+        else LLMProvider.OPENAI
+    )
 
     llm_client = LLMClient(
         api_key=config.llm.api_key,
@@ -569,7 +628,9 @@ async def run_agent(workspace_dir: Path, task: str = None):
     # Set retry callback
     if config.llm.retry.enabled:
         llm_client.retry_callback = on_retry
-        print(f"{Colors.GREEN}✅ LLM retry mechanism enabled (max {config.llm.retry.max_retries} retries){Colors.RESET}")
+        print(
+            f"{Colors.GREEN}✅ LLM retry mechanism enabled (max {config.llm.retry.max_retries} retries){Colors.RESET}"
+        )
 
     # 3. Initialize base tools (independent of workspace)
     tools, skill_loader = await initialize_base_tools(config)
@@ -581,7 +642,9 @@ async def run_agent(workspace_dir: Path, task: str = None):
     system_prompt_path = Config.find_config_file(config.agent.system_prompt_path)
     if system_prompt_path and system_prompt_path.exists():
         system_prompt = system_prompt_path.read_text(encoding="utf-8")
-        print(f"{Colors.GREEN}✅ Loaded system prompt (from: {system_prompt_path}){Colors.RESET}")
+        print(
+            f"{Colors.GREEN}✅ Loaded system prompt (from: {system_prompt_path}){Colors.RESET}"
+        )
     else:
         system_prompt = "You are Mini-Agent, an intelligent assistant powered by MiniMax M2.5 that can help users complete various tasks."
         print(f"{Colors.YELLOW}⚠️  System prompt not found, using default{Colors.RESET}")
@@ -592,7 +655,9 @@ async def run_agent(workspace_dir: Path, task: str = None):
         if skills_metadata:
             # Replace placeholder with actual metadata
             system_prompt = system_prompt.replace("{SKILLS_METADATA}", skills_metadata)
-            print(f"{Colors.GREEN}✅ Injected {len(skill_loader.loaded_skills)} skills metadata into system prompt{Colors.RESET}")
+            print(
+                f"{Colors.GREEN}✅ Injected {len(skill_loader.loaded_skills)} skills metadata into system prompt{Colors.RESET}"
+            )
         else:
             # Remove placeholder if no skills
             system_prompt = system_prompt.replace("{SKILLS_METADATA}", "")
@@ -607,6 +672,7 @@ async def run_agent(workspace_dir: Path, task: str = None):
         tools=tools,
         max_steps=config.agent.max_steps,
         workspace_dir=str(workspace_dir),
+        enable_streaming=config.llm.enable_streaming,
     )
 
     # 8. Display welcome information
@@ -616,7 +682,9 @@ async def run_agent(workspace_dir: Path, task: str = None):
 
     # 8.5 Non-interactive mode: execute task and exit
     if task:
-        print(f"\n{Colors.BRIGHT_BLUE}Agent{Colors.RESET} {Colors.DIM}›{Colors.RESET} {Colors.DIM}Executing task...{Colors.RESET}\n")
+        print(
+            f"\n{Colors.BRIGHT_BLUE}Agent{Colors.RESET} {Colors.DIM}›{Colors.RESET} {Colors.DIM}Executing task...{Colors.RESET}\n"
+        )
         agent.add_user_message(task)
         try:
             await agent.run()
@@ -697,7 +765,9 @@ async def run_agent(workspace_dir: Path, task: str = None):
                 command = user_input.lower()
 
                 if command in ["/exit", "/quit", "/q"]:
-                    print(f"\n{Colors.BRIGHT_YELLOW}👋 Goodbye! Thanks for using Mini Agent{Colors.RESET}\n")
+                    print(
+                        f"\n{Colors.BRIGHT_YELLOW}👋 Goodbye! Thanks for using Mini Agent{Colors.RESET}\n"
+                    )
                     print_stats(agent, session_start)
                     break
 
@@ -709,11 +779,15 @@ async def run_agent(workspace_dir: Path, task: str = None):
                     # Clear message history but keep system prompt
                     old_count = len(agent.messages)
                     agent.messages = [agent.messages[0]]  # Keep only system message
-                    print(f"{Colors.GREEN}✅ Cleared {old_count - 1} messages, starting new session{Colors.RESET}\n")
+                    print(
+                        f"{Colors.GREEN}✅ Cleared {old_count - 1} messages, starting new session{Colors.RESET}\n"
+                    )
                     continue
 
                 elif command == "/history":
-                    print(f"\n{Colors.BRIGHT_CYAN}Current session message count: {len(agent.messages)}{Colors.RESET}\n")
+                    print(
+                        f"\n{Colors.BRIGHT_CYAN}Current session message count: {len(agent.messages)}{Colors.RESET}\n"
+                    )
                     continue
 
                 elif command == "/stats":
@@ -734,12 +808,16 @@ async def run_agent(workspace_dir: Path, task: str = None):
 
                 else:
                     print(f"{Colors.RED}❌ Unknown command: {user_input}{Colors.RESET}")
-                    print(f"{Colors.DIM}Type /help to see available commands{Colors.RESET}\n")
+                    print(
+                        f"{Colors.DIM}Type /help to see available commands{Colors.RESET}\n"
+                    )
                     continue
 
             # Normal conversation - exit check
             if user_input.lower() in ["exit", "quit", "q"]:
-                print(f"\n{Colors.BRIGHT_YELLOW}👋 Goodbye! Thanks for using Mini Agent{Colors.RESET}\n")
+                print(
+                    f"\n{Colors.BRIGHT_YELLOW}👋 Goodbye! Thanks for using Mini Agent{Colors.RESET}\n"
+                )
                 print_stats(agent, session_start)
                 break
 
@@ -767,7 +845,9 @@ async def run_agent(workspace_dir: Path, task: str = None):
                             if msvcrt.kbhit():
                                 char = msvcrt.getch()
                                 if char == b"\x1b":  # Esc
-                                    print(f"\n{Colors.BRIGHT_YELLOW}⏹️  Esc pressed, cancelling...{Colors.RESET}")
+                                    print(
+                                        f"\n{Colors.BRIGHT_YELLOW}⏹️  Esc pressed, cancelling...{Colors.RESET}"
+                                    )
                                     esc_cancelled[0] = True
                                     cancel_event.set()
                                     break
@@ -792,7 +872,9 @@ async def run_agent(workspace_dir: Path, task: str = None):
                             if rlist:
                                 char = sys.stdin.read(1)
                                 if char == "\x1b":  # Esc
-                                    print(f"\n{Colors.BRIGHT_YELLOW}⏹️  Esc pressed, cancelling...{Colors.RESET}")
+                                    print(
+                                        f"\n{Colors.BRIGHT_YELLOW}⏹️  Esc pressed, cancelling...{Colors.RESET}"
+                                    )
                                     esc_cancelled[0] = True
                                     cancel_event.set()
                                     break
@@ -819,7 +901,9 @@ async def run_agent(workspace_dir: Path, task: str = None):
                 _ = agent_task.result()
 
             except asyncio.CancelledError:
-                print(f"\n{Colors.BRIGHT_YELLOW}⚠️  Agent execution cancelled{Colors.RESET}")
+                print(
+                    f"\n{Colors.BRIGHT_YELLOW}⚠️  Agent execution cancelled{Colors.RESET}"
+                )
             finally:
                 agent.cancel_event = None
                 esc_listener_stop.set()
@@ -829,7 +913,9 @@ async def run_agent(workspace_dir: Path, task: str = None):
             print(f"\n{Colors.DIM}{'─' * 60}{Colors.RESET}\n")
 
         except KeyboardInterrupt:
-            print(f"\n\n{Colors.BRIGHT_YELLOW}👋 Interrupt signal detected, exiting...{Colors.RESET}\n")
+            print(
+                f"\n\n{Colors.BRIGHT_YELLOW}👋 Interrupt signal detected, exiting...{Colors.RESET}\n"
+            )
             print_stats(agent, session_start)
             break
 

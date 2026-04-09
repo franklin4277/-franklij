@@ -10,7 +10,7 @@ import tiktoken
 
 from .llm import LLMClient
 from .logger import AgentLogger
-from .schema import Message
+from .schema import LLMResponse, Message, ToolCall
 from .tools.base import Tool, ToolResult
 from .utils import calculate_display_width
 
@@ -53,12 +53,14 @@ class Agent:
         max_steps: int = 50,
         workspace_dir: str = "./workspace",
         token_limit: int = 80000,  # Summary triggered when tokens exceed this value
+        enable_streaming: bool = False,  # Enable streaming responses
     ):
         self.llm = llm_client
         self.tools = {tool.name: tool for tool in tools}
         self.max_steps = max_steps
         self.token_limit = token_limit
         self.workspace_dir = Path(workspace_dir)
+        self.enable_streaming = enable_streaming
         # Cancellation event for interrupting agent execution (set externally, e.g., by Esc key)
         self.cancel_event: Optional[asyncio.Event] = None
 
@@ -118,7 +120,82 @@ class Agent:
         removed_count = len(self.messages) - last_assistant_idx
         if removed_count > 0:
             self.messages = self.messages[:last_assistant_idx]
-            print(f"{Colors.DIM}   Cleaned up {removed_count} incomplete message(s){Colors.RESET}")
+            print(
+                f"{Colors.DIM}   Cleaned up {removed_count} incomplete message(s){Colors.RESET}"
+            )
+
+    async def _handle_streaming_response(
+        self, tool_list: list[Tool]
+    ) -> tuple[str, str, bool]:
+        """Handle streaming response from LLM.
+
+        Args:
+            tool_list: List of available tools
+
+        Returns:
+            Tuple of (final_content, final_thinking, has_tool_calls)
+        """
+        accumulated_text = ""
+        accumulated_thinking = ""
+        final_tool_calls: list[ToolCall] | None = None
+        last_response: LLMResponse | None = None
+        pending_tool_calls: dict[str, ToolCall] = {}
+
+        print(
+            f"\n{Colors.BOLD}{Colors.BRIGHT_BLUE}🤖 Assistant (streaming):{Colors.RESET}"
+        )
+
+        async for response in self.llm.stream_generate(
+            messages=self.messages, tools=tool_list
+        ):
+            last_response = response
+
+            if response.thinking and response.thinking != accumulated_thinking:
+                if not accumulated_thinking:
+                    print(f"\n{Colors.BOLD}{Colors.MAGENTA}🧠 Thinking:{Colors.RESET}")
+                thinking_diff = response.thinking[len(accumulated_thinking) :]
+                accumulated_thinking = response.thinking
+                print(f"{Colors.DIM}{thinking_diff}{Colors.RESET}", end="", flush=True)
+
+            if response.content and response.content != accumulated_text:
+                content_diff = response.content[len(accumulated_text) :]
+                accumulated_text = response.content
+                print(
+                    f"{Colors.BRIGHT_WHITE}{content_diff}{Colors.RESET}",
+                    end="",
+                    flush=True,
+                )
+
+            if response.tool_calls:
+                for tc in response.tool_calls:
+                    if tc.id not in pending_tool_calls:
+                        pending_tool_calls[tc.id] = tc
+                        print(
+                            f"\n\n{Colors.BRIGHT_YELLOW}🔧 Tool Call:{Colors.RESET} {Colors.BOLD}{Colors.CYAN}{tc.function.name}{Colors.RESET}"
+                        )
+                        print(
+                            f"{Colors.DIM}   (streaming tool call received){Colors.RESET}"
+                        )
+
+                if response.finish_reason == "tool_use":
+                    final_tool_calls = list(pending_tool_calls.values())
+                    pending_tool_calls.clear()
+
+            if self._check_cancelled():
+                return "", "", False
+
+        print()  # Newline after streaming completes
+
+        if last_response:
+            if last_response.usage:
+                self.api_total_tokens = last_response.usage.total_tokens
+
+            if not final_tool_calls and last_response.tool_calls:
+                final_tool_calls = last_response.tool_calls
+
+            return accumulated_text, accumulated_thinking, final_tool_calls is not None
+
+        return "", "", False
 
     def _estimate_tokens(self) -> int:
         """Accurately calculate token count for message history using tiktoken
@@ -198,7 +275,10 @@ class Agent:
         estimated_tokens = self._estimate_tokens()
 
         # Check both local estimation and API reported tokens
-        should_summarize = estimated_tokens > self.token_limit or self.api_total_tokens > self.token_limit
+        should_summarize = (
+            estimated_tokens > self.token_limit
+            or self.api_total_tokens > self.token_limit
+        )
 
         # If neither exceeded, no summary needed
         if not should_summarize:
@@ -207,14 +287,20 @@ class Agent:
         print(
             f"\n{Colors.BRIGHT_YELLOW}📊 Token usage - Local estimate: {estimated_tokens}, API reported: {self.api_total_tokens}, Limit: {self.token_limit}{Colors.RESET}"
         )
-        print(f"{Colors.BRIGHT_YELLOW}🔄 Triggering message history summarization...{Colors.RESET}")
+        print(
+            f"{Colors.BRIGHT_YELLOW}🔄 Triggering message history summarization...{Colors.RESET}"
+        )
 
         # Find all user message indices (skip system prompt)
-        user_indices = [i for i, msg in enumerate(self.messages) if msg.role == "user" and i > 0]
+        user_indices = [
+            i for i, msg in enumerate(self.messages) if msg.role == "user" and i > 0
+        ]
 
         # Need at least 1 user message to perform summary
         if len(user_indices) < 1:
-            print(f"{Colors.BRIGHT_YELLOW}⚠️  Insufficient messages, cannot summarize{Colors.RESET}")
+            print(
+                f"{Colors.BRIGHT_YELLOW}⚠️  Insufficient messages, cannot summarize{Colors.RESET}"
+            )
             return
 
         # Build new message list
@@ -255,9 +341,15 @@ class Agent:
         self._skip_next_token_check = True
 
         new_tokens = self._estimate_tokens()
-        print(f"{Colors.BRIGHT_GREEN}✓ Summary completed, local tokens: {estimated_tokens} → {new_tokens}{Colors.RESET}")
-        print(f"{Colors.DIM}  Structure: system + {len(user_indices)} user messages + {summary_count} summaries{Colors.RESET}")
-        print(f"{Colors.DIM}  Note: API token count will update on next LLM call{Colors.RESET}")
+        print(
+            f"{Colors.BRIGHT_GREEN}✓ Summary completed, local tokens: {estimated_tokens} → {new_tokens}{Colors.RESET}"
+        )
+        print(
+            f"{Colors.DIM}  Structure: system + {len(user_indices)} user messages + {summary_count} summaries{Colors.RESET}"
+        )
+        print(
+            f"{Colors.DIM}  Note: API token count will update on next LLM call{Colors.RESET}"
+        )
 
     async def _create_summary(self, messages: list[Message], round_num: int) -> str:
         """Create summary for one execution round
@@ -276,13 +368,17 @@ class Agent:
         summary_content = f"Round {round_num} execution process:\n\n"
         for msg in messages:
             if msg.role == "assistant":
-                content_text = msg.content if isinstance(msg.content, str) else str(msg.content)
+                content_text = (
+                    msg.content if isinstance(msg.content, str) else str(msg.content)
+                )
                 summary_content += f"Assistant: {content_text}\n"
                 if msg.tool_calls:
                     tool_names = [tc.function.name for tc in msg.tool_calls]
                     summary_content += f"  → Called tools: {', '.join(tool_names)}\n"
             elif msg.role == "tool":
-                result_preview = msg.content if isinstance(msg.content, str) else str(msg.content)
+                result_preview = (
+                    msg.content if isinstance(msg.content, str) else str(msg.content)
+                )
                 summary_content += f"  ← Tool returned: {result_preview}...\n"
 
         # Call LLM to generate concise summary
@@ -310,11 +406,15 @@ Requirements:
             )
 
             summary_text = response.content
-            print(f"{Colors.BRIGHT_GREEN}✓ Summary for round {round_num} generated successfully{Colors.RESET}")
+            print(
+                f"{Colors.BRIGHT_GREEN}✓ Summary for round {round_num} generated successfully{Colors.RESET}"
+            )
             return summary_text
 
         except Exception as e:
-            print(f"{Colors.BRIGHT_RED}✗ Summary generation failed for round {round_num}: {e}{Colors.RESET}")
+            print(
+                f"{Colors.BRIGHT_RED}✗ Summary generation failed for round {round_num}: {e}{Colors.RESET}"
+            )
             # Use simple text summary on failure
             return summary_content
 
@@ -335,7 +435,9 @@ Requirements:
 
         # Start new run, initialize log file
         self.logger.start_new_run()
-        print(f"{Colors.DIM}📝 Log file: {self.logger.get_log_file_path()}{Colors.RESET}")
+        print(
+            f"{Colors.DIM}📝 Log file: {self.logger.get_log_file_path()}{Colors.RESET}"
+        )
 
         step = 0
         run_start_time = perf_counter()
@@ -359,7 +461,9 @@ Requirements:
             padding = max(0, BOX_WIDTH - 1 - step_display_width)  # -1 for leading space
 
             print(f"\n{Colors.DIM}╭{'─' * BOX_WIDTH}╮{Colors.RESET}")
-            print(f"{Colors.DIM}│{Colors.RESET} {step_text}{' ' * padding}{Colors.DIM}│{Colors.RESET}")
+            print(
+                f"{Colors.DIM}│{Colors.RESET} {step_text}{' ' * padding}{Colors.DIM}│{Colors.RESET}"
+            )
             print(f"{Colors.DIM}╰{'─' * BOX_WIDTH}╯{Colors.RESET}")
 
             # Get tool list for LLM call
@@ -369,56 +473,95 @@ Requirements:
             self.logger.log_request(messages=self.messages, tools=tool_list)
 
             try:
-                response = await self.llm.generate(messages=self.messages, tools=tool_list)
+                if self.enable_streaming:
+                    (
+                        streaming_content,
+                        streaming_thinking,
+                        has_tool_calls,
+                    ) = await self._handle_streaming_response(tool_list)
+                    if self._check_cancelled():
+                        self._cleanup_incomplete_messages()
+                        cancel_msg = "Task cancelled by user."
+                        print(f"\n{Colors.BRIGHT_YELLOW}⚠️  {cancel_msg}{Colors.RESET}")
+                        return cancel_msg
+                    response = None
+                else:
+                    response = await self.llm.generate(
+                        messages=self.messages, tools=tool_list
+                    )
+                    streaming_content = None
+                    streaming_thinking = ""
+                    has_tool_calls = (
+                        response.tool_calls is not None if response else False
+                    )
             except Exception as e:
                 # Check if it's a retry exhausted error
                 from .retry import RetryExhaustedError
 
                 if isinstance(e, RetryExhaustedError):
                     error_msg = f"LLM call failed after {e.attempts} retries\nLast error: {str(e.last_exception)}"
-                    print(f"\n{Colors.BRIGHT_RED}❌ Retry failed:{Colors.RESET} {error_msg}")
+                    print(
+                        f"\n{Colors.BRIGHT_RED}❌ Retry failed:{Colors.RESET} {error_msg}"
+                    )
                 else:
                     error_msg = f"LLM call failed: {str(e)}"
                     print(f"\n{Colors.BRIGHT_RED}❌ Error:{Colors.RESET} {error_msg}")
                 return error_msg
 
             # Accumulate API reported token usage
-            if response.usage:
+            if response and response.usage:
                 self.api_total_tokens = response.usage.total_tokens
+
+            # Get content and tool calls (from streaming or non-streaming)
+            if self.enable_streaming and streaming_content is not None:
+                final_content = streaming_content
+                final_thinking = streaming_thinking
+                final_tool_calls: list[ToolCall] | None = None
+            elif response:
+                final_content = response.content
+                final_thinking = response.thinking
+                final_tool_calls = response.tool_calls
+            else:
+                final_content = ""
+                final_thinking = ""
+                final_tool_calls = None
 
             # Log LLM response
             self.logger.log_response(
-                content=response.content,
-                thinking=response.thinking,
-                tool_calls=response.tool_calls,
-                finish_reason=response.finish_reason,
+                content=final_content,
+                thinking=final_thinking,
+                tool_calls=final_tool_calls,
+                finish_reason=response.finish_reason if response else "stop",
             )
 
             # Add assistant message
             assistant_msg = Message(
                 role="assistant",
-                content=response.content,
-                thinking=response.thinking,
-                tool_calls=response.tool_calls,
+                content=final_content,
+                thinking=final_thinking,
+                tool_calls=final_tool_calls,
             )
             self.messages.append(assistant_msg)
 
-            # Print thinking if present
-            if response.thinking:
-                print(f"\n{Colors.BOLD}{Colors.MAGENTA}🧠 Thinking:{Colors.RESET}")
-                print(f"{Colors.DIM}{response.thinking}{Colors.RESET}")
-
-            # Print assistant response
-            if response.content:
-                print(f"\n{Colors.BOLD}{Colors.BRIGHT_BLUE}🤖 Assistant:{Colors.RESET}")
-                print(f"{response.content}")
+            # Print thinking and response for non-streaming mode
+            if not self.enable_streaming:
+                if final_thinking:
+                    print(f"\n{Colors.BOLD}{Colors.MAGENTA}🧠 Thinking:{Colors.RESET}")
+                    print(f"{Colors.DIM}{final_thinking}{Colors.RESET}")
+                if final_content:
+                    print(
+                        f"\n{Colors.BOLD}{Colors.BRIGHT_BLUE}🤖 Assistant:{Colors.RESET}"
+                    )
+                    print(f"{final_content}")
 
             # Check if task is complete (no tool calls)
-            if not response.tool_calls:
+            if not final_tool_calls:
                 step_elapsed = perf_counter() - step_start_time
                 total_elapsed = perf_counter() - run_start_time
-                print(f"\n{Colors.DIM}⏱️  Step {step + 1} completed in {step_elapsed:.2f}s (total: {total_elapsed:.2f}s){Colors.RESET}")
-                return response.content
+                print(
+                    f"\n{Colors.DIM}⏱️  Step {step + 1} completed in {step_elapsed:.2f}s (total: {total_elapsed:.2f}s){Colors.RESET}"
+                )
+                return final_content
 
             # Check for cancellation before executing tools
             if self._check_cancelled():
@@ -428,13 +571,15 @@ Requirements:
                 return cancel_msg
 
             # Execute tool calls
-            for tool_call in response.tool_calls:
+            for tool_call in final_tool_calls:
                 tool_call_id = tool_call.id
                 function_name = tool_call.function.name
                 arguments = tool_call.function.arguments
 
                 # Tool call header
-                print(f"\n{Colors.BRIGHT_YELLOW}🔧 Tool Call:{Colors.RESET} {Colors.BOLD}{Colors.CYAN}{function_name}{Colors.RESET}")
+                print(
+                    f"\n{Colors.BRIGHT_YELLOW}🔧 Tool Call:{Colors.RESET} {Colors.BOLD}{Colors.CYAN}{function_name}{Colors.RESET}"
+                )
 
                 # Arguments (formatted display)
                 print(f"{Colors.DIM}   Arguments:{Colors.RESET}")
@@ -486,15 +631,21 @@ Requirements:
                 if result.success:
                     result_text = result.content
                     if len(result_text) > 300:
-                        result_text = result_text[:300] + f"{Colors.DIM}...{Colors.RESET}"
+                        result_text = (
+                            result_text[:300] + f"{Colors.DIM}...{Colors.RESET}"
+                        )
                     print(f"{Colors.BRIGHT_GREEN}✓ Result:{Colors.RESET} {result_text}")
                 else:
-                    print(f"{Colors.BRIGHT_RED}✗ Error:{Colors.RESET} {Colors.RED}{result.error}{Colors.RESET}")
+                    print(
+                        f"{Colors.BRIGHT_RED}✗ Error:{Colors.RESET} {Colors.RED}{result.error}{Colors.RESET}"
+                    )
 
                 # Add tool result message
                 tool_msg = Message(
                     role="tool",
-                    content=result.content if result.success else f"Error: {result.error}",
+                    content=result.content
+                    if result.success
+                    else f"Error: {result.error}",
                     tool_call_id=tool_call_id,
                     name=function_name,
                 )
@@ -509,7 +660,9 @@ Requirements:
 
             step_elapsed = perf_counter() - step_start_time
             total_elapsed = perf_counter() - run_start_time
-            print(f"\n{Colors.DIM}⏱️  Step {step + 1} completed in {step_elapsed:.2f}s (total: {total_elapsed:.2f}s){Colors.RESET}")
+            print(
+                f"\n{Colors.DIM}⏱️  Step {step + 1} completed in {step_elapsed:.2f}s (total: {total_elapsed:.2f}s){Colors.RESET}"
+            )
 
             step += 1
 
