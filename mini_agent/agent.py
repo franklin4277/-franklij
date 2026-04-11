@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import traceback
 from pathlib import Path
 from time import perf_counter
 from typing import Optional
@@ -10,6 +11,7 @@ import tiktoken
 
 from .llm import LLMClient
 from .logger import AgentLogger
+from .retry import RetryExhaustedError
 from .schema import Message
 from .tools.base import Tool, ToolResult
 from .utils import calculate_display_width
@@ -128,7 +130,7 @@ class Agent:
         try:
             # Use cl100k_base encoder (used by GPT-4 and most modern models)
             encoding = tiktoken.get_encoding("cl100k_base")
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             # Fallback: if tiktoken initialization fails, use simple estimation
             return self._estimate_tokens_fallback()
 
@@ -313,7 +315,7 @@ Requirements:
             print(f"{Colors.BRIGHT_GREEN}✓ Summary for round {round_num} generated successfully{Colors.RESET}")
             return summary_text
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"{Colors.BRIGHT_RED}✗ Summary generation failed for round {round_num}: {e}{Colors.RESET}")
             # Use simple text summary on failure
             return summary_content
@@ -353,7 +355,7 @@ Requirements:
             await self._summarize_messages()
 
             # Step header with proper width calculation
-            BOX_WIDTH = 58
+            BOX_WIDTH = 58  # pylint: disable=invalid-name
             step_text = f"{Colors.BOLD}{Colors.BRIGHT_CYAN}💭 Step {step + 1}/{self.max_steps}{Colors.RESET}"
             step_display_width = calculate_display_width(step_text)
             padding = max(0, BOX_WIDTH - 1 - step_display_width)  # -1 for leading space
@@ -370,10 +372,8 @@ Requirements:
 
             try:
                 response = await self.llm.generate(messages=self.messages, tools=tool_list)
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 # Check if it's a retry exhausted error
-                from .retry import RetryExhaustedError
-
                 if isinstance(e, RetryExhaustedError):
                     error_msg = f"LLM call failed after {e.attempts} retries\nLast error: {str(e.last_exception)}"
                     print(f"\n{Colors.BRIGHT_RED}❌ Retry failed:{Colors.RESET} {error_msg}")
@@ -461,10 +461,8 @@ Requirements:
                     try:
                         tool = self.tools[function_name]
                         result = await tool.execute(**arguments)
-                    except Exception as e:
+                    except Exception as e:  # pylint: disable=broad-exception-caught
                         # Catch all exceptions during tool execution, convert to failed ToolResult
-                        import traceback
-
                         error_detail = f"{type(e).__name__}: {str(e)}"
                         error_trace = traceback.format_exc()
                         result = ToolResult(

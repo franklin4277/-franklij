@@ -3,8 +3,10 @@
 This example demonstrates how to use the LLMClient wrapper with different
 LLM providers (Anthropic or OpenAI) through the provider parameter.
 """
+# pylint: disable=invalid-name
 
 import asyncio
+import traceback
 from pathlib import Path
 
 import yaml
@@ -43,7 +45,7 @@ async def demo_anthropic_provider():
             print(f"💭 Thinking: {response.thinking}")
         print(f"💬 Model: {response.content}")
         print("✅ Anthropic provider demo completed")
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"❌ Error: {e}")
 
 
@@ -78,7 +80,7 @@ async def demo_openai_provider():
             print(f"💭 Thinking: {response.thinking}")
         print(f"💬 Model: {response.content}")
         print("✅ OpenAI provider demo completed")
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"❌ Error: {e}")
 
 
@@ -110,7 +112,7 @@ async def demo_default_provider():
         response = await client.generate(messages)
         print(f"💬 Model: {response.content}")
         print("✅ Default provider demo completed")
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"❌ Error: {e}")
 
 
@@ -152,7 +154,7 @@ async def demo_provider_comparison():
         print(f"🟢 OpenAI: {openai_response.content}")
 
         print("\n✅ Provider comparison completed")
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"❌ Error: {e}")
 
 
@@ -177,10 +179,8 @@ async def main():
 
         print("\n✅ All demos completed successfully!")
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"\n❌ Error: {e}")
-        import traceback
-
         traceback.print_exc()
 
 

@@ -2,8 +2,10 @@
 
 This example demonstrates how to use the Tool base class and its schema methods.
 """
+# pylint: disable=invalid-name
 
 import asyncio
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -274,10 +276,8 @@ async def main():
 
         print("\n✅ All demos completed successfully!")
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"\n❌ Error: {e}")
-        import traceback
-
         traceback.print_exc()
 
 

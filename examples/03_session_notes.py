@@ -5,6 +5,7 @@ that allows agents to maintain memory across sessions.
 
 Based on: tests/test_note_tool.py, tests/test_integration.py
 """
+# pylint: disable=invalid-name
 
 import asyncio
 import json
@@ -66,7 +67,7 @@ async def demo_direct_note_usage():
         # Show the memory file
         print("\n📄 Memory file content:")
         print("=" * 60)
-        notes = json.loads(Path(note_file).read_text())
+        notes = json.loads(Path(note_file).read_text(encoding='utf-8'))
         print(json.dumps(notes, indent=2, ensure_ascii=False))
         print("=" * 60)
 
@@ -183,7 +184,7 @@ Guidelines:
             else:
                 print("\n⚠️  No notes found")
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"❌ Error: {e}")
             return
 
@@ -224,7 +225,7 @@ Guidelines:
             print("  2. Agent in Session 2 recalled previous notes")
             print("  3. Memory persists across agent instances via file")
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"❌ Error: {e}")
 
 
