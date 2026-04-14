@@ -8,8 +8,11 @@ This example demonstrates a complete agent setup with:
 
 Based on: tests/test_integration.py
 """
+# pylint: disable=invalid-name
 
 import asyncio
+import json
+import traceback
 import tempfile
 from pathlib import Path
 
@@ -96,7 +99,7 @@ You have record_note and recall_notes tools. Use them to:
                 print(f"✓ Loaded {len(mcp_tools)} MCP tools")
             else:
                 print("⚠️  No MCP tools configured (mcp.json is empty or disabled)")
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"⚠️  MCP tools not loaded: {e}")
 
         # Create agent
@@ -169,17 +172,13 @@ You have record_note and recall_notes tools. Use them to:
 
             # Show memory
             if memory_file.exists():
-                import json
-
-                notes = json.loads(memory_file.read_text())
+                notes = json.loads(memory_file.read_text(encoding='utf-8'))
                 print(f"\n💾 Session notes recorded: {len(notes)}")
                 for note in notes:
                     print(f"  - [{note['category']}] {note['content'][:60]}...")
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"❌ Error during agent execution: {e}")
-            import traceback
-
             traceback.print_exc()
 
 
@@ -244,7 +243,7 @@ async def demo_interactive_mode():
             try:
                 result = await agent.run()
                 print(f"Agent: {result}\n")
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 print(f"Error: {e}")
                 break
 

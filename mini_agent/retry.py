@@ -109,16 +109,24 @@ def async_retry(
 
                     # If this is the last attempt, don't retry
                     if attempt >= config.max_retries:
-                        logger.error(f"Function {func.__name__} retry failed, reached maximum retry count {config.max_retries}")
-                        raise RetryExhaustedError(e, attempt + 1)
+                        logger.error(
+                            "Function %s retry failed, reached maximum retry count %d",
+                            func.__name__,
+                            config.max_retries,
+                        )
+                        raise RetryExhaustedError(e, attempt + 1) from e
 
                     # Calculate delay time
                     delay = config.calculate_delay(attempt)
 
                     # Log
                     logger.warning(
-                        f"Function {func.__name__} call {attempt + 1} failed: {str(e)}, "
-                        f"retrying attempt {attempt + 2} after {delay:.2f} seconds"
+                        "Function %s call %d failed: %s, retrying attempt %d after %.2f seconds",
+                        func.__name__,
+                        attempt + 1,
+                        str(e),
+                        attempt + 2,
+                        delay,
                     )
 
                     # Call callback function
@@ -131,7 +139,7 @@ def async_retry(
             # Should not reach here in theory
             if last_exception:
                 raise last_exception
-            raise Exception("Unknown error")
+            raise RuntimeError("Unknown error")  # W0719: use specific exception
 
         return wrapper
 

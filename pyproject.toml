@@ -59,7 +59,16 @@ asyncio_mode = "auto"
 # Disable warnings for Tool.execute method signature differences
 # We intentionally use explicit parameters in subclasses for better type hints
 disable = [
-    "arguments-differ",  # Allow subclasses to have different parameter signatures
+    "arguments-differ",           # Allow subclasses to have different parameter signatures
+    "line-too-long",              # Long lines acceptable in this codebase
+    "too-many-locals",            # Complex functions with many local variables
+    "too-many-statements",        # Complex functions
+    "too-many-branches",          # Complex control flow
+    "too-many-arguments",         # Functions with many parameters
+    "too-many-positional-arguments",
+    "too-many-instance-attributes",
+    "too-few-public-methods",     # Data classes and simple containers
+    "duplicate-code",             # Duplicate code across files (R0801)
 ]
 
 [dependency-groups]

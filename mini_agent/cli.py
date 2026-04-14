@@ -30,6 +30,7 @@ from prompt_toolkit.styles import Style
 from mini_agent import LLMClient
 from mini_agent.agent import Agent
 from mini_agent.config import Config
+from mini_agent.retry import RetryConfig as RetryConfigBase
 from mini_agent.schema import LLMProvider
 from mini_agent.tools.base import Tool
 from mini_agent.tools.bash_tool import BashKillTool, BashOutputTool, BashTool
@@ -138,7 +139,7 @@ def _open_directory_in_file_manager(directory: Path) -> None:
             subprocess.run(["xdg-open", str(directory)], check=False)
     except FileNotFoundError:
         print(f"{Colors.YELLOW}Could not open file manager. Please navigate manually.{Colors.RESET}")
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"{Colors.YELLOW}Error opening file manager: {e}{Colors.RESET}")
 
 
@@ -164,13 +165,13 @@ def read_log_file(filename: str) -> None:
         print(content)
         print(f"{Colors.DIM}{'─' * 80}{Colors.RESET}")
         print(f"\n{Colors.GREEN}✅ End of file{Colors.RESET}\n")
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"\n{Colors.RED}❌ Error reading file: {e}{Colors.RESET}\n")
 
 
 def print_banner():
     """Print welcome banner with proper alignment"""
-    BOX_WIDTH = 58
+    BOX_WIDTH = 58  # pylint: disable=invalid-name
     banner_text = f"{Colors.BOLD}🤖 Mini Agent - Multi-turn Interactive Session{Colors.RESET}"
     banner_width = calculate_display_width(banner_text)
 
@@ -222,7 +223,7 @@ def print_help():
 
 def print_session_info(agent: Agent, workspace_dir: Path, model: str):
     """Print session information with proper alignment"""
-    BOX_WIDTH = 58
+    BOX_WIDTH = 58  # pylint: disable=invalid-name
 
     def print_info_line(text: str):
         """Print a single info line with proper padding"""
@@ -394,7 +395,7 @@ async def initialize_base_tools(config: Config):
                 print(f"{Colors.GREEN}✅ Loaded Skill tool (get_skill){Colors.RESET}")
             else:
                 print(f"{Colors.YELLOW}⚠️  No available Skills found{Colors.RESET}")
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"{Colors.YELLOW}⚠️  Failed to load Skills: {e}{Colors.RESET}")
 
     # 4. MCP tools (loaded with priority search)
@@ -424,7 +425,7 @@ async def initialize_base_tools(config: Config):
                     print(f"{Colors.YELLOW}⚠️  No available MCP tools found{Colors.RESET}")
             else:
                 print(f"{Colors.YELLOW}⚠️  MCP config file not found: {config.tools.mcp_config_path}{Colors.RESET}")
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"{Colors.YELLOW}⚠️  Failed to load MCP tools: {e}{Colors.RESET}")
 
     print()  # Empty line separator
@@ -479,7 +480,7 @@ async def _quiet_cleanup():
     loop.set_exception_handler(lambda _loop, _ctx: None)
     try:
         await cleanup_mcp_connections()
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         pass
 
 
@@ -531,13 +532,11 @@ async def run_agent(workspace_dir: Path, task: str = None):
         print(f"{Colors.RED}❌ Error: {e}{Colors.RESET}")
         print(f"{Colors.YELLOW}Please check the configuration file format{Colors.RESET}")
         return
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"{Colors.RED}❌ Error: Failed to load configuration file: {e}{Colors.RESET}")
         return
 
     # 2. Initialize LLM client
-    from mini_agent.retry import RetryConfig as RetryConfigBase
-
     # Convert configuration format
     retry_config = RetryConfigBase(
         enabled=config.llm.retry.enabled,
@@ -620,7 +619,7 @@ async def run_agent(workspace_dir: Path, task: str = None):
         agent.add_user_message(task)
         try:
             await agent.run()
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"\n{Colors.RED}❌ Error: {e}{Colors.RESET}")
         finally:
             print_stats(agent, session_start)
@@ -654,12 +653,12 @@ async def run_agent(workspace_dir: Path, task: str = None):
         event.current_buffer.reset()
 
     @kb.add("c-l")  # Ctrl+L: Clear screen (optional bonus)
-    def _(event):
+    def _(event):  # pylint: disable=function-redefined
         """Clear the screen"""
         event.app.renderer.clear()
 
     @kb.add("c-j")  # Ctrl+J (对应 Ctrl+Enter)
-    def _(event):
+    def _(event):  # pylint: disable=function-redefined
         """Insert a newline"""
         event.current_buffer.insert_text("\n")
 
@@ -701,26 +700,26 @@ async def run_agent(workspace_dir: Path, task: str = None):
                     print_stats(agent, session_start)
                     break
 
-                elif command == "/help":
+                if command == "/help":
                     print_help()
                     continue
 
-                elif command == "/clear":
+                if command == "/clear":
                     # Clear message history but keep system prompt
                     old_count = len(agent.messages)
                     agent.messages = [agent.messages[0]]  # Keep only system message
                     print(f"{Colors.GREEN}✅ Cleared {old_count - 1} messages, starting new session{Colors.RESET}\n")
                     continue
 
-                elif command == "/history":
+                if command == "/history":
                     print(f"\n{Colors.BRIGHT_CYAN}Current session message count: {len(agent.messages)}{Colors.RESET}\n")
                     continue
 
-                elif command == "/stats":
+                if command == "/stats":
                     print_stats(agent, session_start)
                     continue
 
-                elif command == "/log" or command.startswith("/log "):
+                if command == "/log" or command.startswith("/log "):
                     # Parse /log command
                     parts = user_input.split(maxsplit=1)
                     if len(parts) == 1:
@@ -732,10 +731,9 @@ async def run_agent(workspace_dir: Path, task: str = None):
                         read_log_file(filename)
                     continue
 
-                else:
-                    print(f"{Colors.RED}❌ Unknown command: {user_input}{Colors.RESET}")
-                    print(f"{Colors.DIM}Type /help to see available commands{Colors.RESET}\n")
-                    continue
+                print(f"{Colors.RED}❌ Unknown command: {user_input}{Colors.RESET}")
+                print(f"{Colors.DIM}Type /help to see available commands{Colors.RESET}\n")
+                continue
 
             # Normal conversation - exit check
             if user_input.lower() in ["exit", "quit", "q"]:
@@ -761,7 +759,7 @@ async def run_agent(workspace_dir: Path, task: str = None):
                 """Listen for Esc key in a separate thread."""
                 if platform.system() == "Windows":
                     try:
-                        import msvcrt
+                        import msvcrt  # pylint: disable=import-error,import-outside-toplevel
 
                         while not esc_listener_stop.is_set():
                             if msvcrt.kbhit():
@@ -772,15 +770,15 @@ async def run_agent(workspace_dir: Path, task: str = None):
                                     cancel_event.set()
                                     break
                             esc_listener_stop.wait(0.05)
-                    except Exception:
+                    except Exception:  # pylint: disable=broad-exception-caught
                         pass
                     return
 
                 # Unix/macOS
                 try:
-                    import select
-                    import termios
-                    import tty
+                    import select  # pylint: disable=import-outside-toplevel
+                    import termios  # pylint: disable=import-error,import-outside-toplevel
+                    import tty  # pylint: disable=import-error,import-outside-toplevel
 
                     fd = sys.stdin.fileno()
                     old_settings = termios.tcgetattr(fd)
@@ -798,7 +796,7 @@ async def run_agent(workspace_dir: Path, task: str = None):
                                     break
                     finally:
                         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                except Exception:
+                except Exception:  # pylint: disable=broad-exception-caught
                     pass
 
             # Start Esc listener thread
@@ -833,7 +831,7 @@ async def run_agent(workspace_dir: Path, task: str = None):
             print_stats(agent, session_start)
             break
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"\n{Colors.RED}❌ Error: {e}{Colors.RESET}")
             print(f"{Colors.DIM}{'─' * 60}{Colors.RESET}\n")
 

@@ -1,7 +1,209 @@
 {
     "mcpServers": {
+
+        "slack": {
+            "description": "Slack - 讀寫頻道、搜尋訊息、發送排程訊息",
+            "type": "http",
+            "url": "https://mcp.slack.com/mcp",
+            "oauth": {
+                "clientId": "1601185624273.8899143856786",
+                "callbackPort": 3118
+            },
+            "disabled": true
+        },
+
+        "linear": {
+            "description": "Linear - 專案管理、Issue 追蹤、里程碑",
+            "type": "http",
+            "url": "https://mcp.linear.app/mcp",
+            "disabled": true
+        },
+
+        "asana": {
+            "description": "Asana - 任務管理、專案狀態、Portfolio",
+            "type": "sse",
+            "url": "https://mcp.asana.com/sse",
+            "disabled": true
+        },
+
+        "notion": {
+            "description": "Notion - 頁面讀寫、資料庫查詢、搜尋。NOTION_TOKEN 填你的 Integration token",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@notionhq/notion-mcp-server"
+            ],
+            "env": {
+                "OPENAPI_MCP_HEADERS": "{\"Authorization\": \"Bearer YOUR_NOTION_TOKEN\", \"Notion-Version\": \"2022-06-28\"}"
+            },
+            "disabled": true
+        },
+
+        "gmail": {
+            "description": "Gmail - 讀信、起草、搜尋郵件（首次啟動會跑 OAuth 授權）",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@gongrzhe/server-gmail-autoauth-mcp"
+            ],
+            "disabled": true
+        },
+
+        "figma": {
+            "description": "Figma - 讀設計稿、取元件、截圖。需替換 YOUR_FIGMA_API_KEY",
+            "command": "npx",
+            "args": [
+                "-y",
+                "figma-developer-mcp",
+                "--figma-api-key=YOUR_FIGMA_API_KEY",
+                "--stdio"
+            ],
+            "disabled": true
+        },
+
+        "cloudflare": {
+            "description": "Cloudflare - Workers、D1、KV、R2 管理。需替換 YOUR_CLOUDFLARE_API_TOKEN",
+            "type": "http",
+            "url": "https://mcp.cloudflare.com/sse",
+            "env": {
+                "CLOUDFLARE_API_TOKEN": "YOUR_CLOUDFLARE_API_TOKEN"
+            },
+            "disabled": true
+        },
+
+        "memory": {
+            "description": "Memory - 知識圖譜長期記憶系統（對應 Claude Code 的 memory MCP）",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-memory"
+            ],
+            "disabled": true
+        },
+
+        "filesystem": {
+            "description": "Filesystem - 讀寫本地檔案系統。將 YOUR_ALLOWED_DIR 替換為允許存取的路徑",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-filesystem",
+                "YOUR_ALLOWED_DIR"
+            ],
+            "disabled": true
+        },
+
+        "sequential-thinking": {
+            "description": "Sequential Thinking - 分步驟推理，適合複雜分析任務",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-sequential-thinking"
+            ],
+            "disabled": true
+        },
+
+        "brave-search": {
+            "description": "Brave Search - 網頁搜尋。需填入 BRAVE_API_KEY",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-brave-search"
+            ],
+            "env": {
+                "BRAVE_API_KEY": "YOUR_BRAVE_API_KEY"
+            },
+            "disabled": true
+        },
+
+        "puppeteer": {
+            "description": "Puppeteer - 瀏覽器自動化、截圖、爬頁面",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-puppeteer"
+            ],
+            "disabled": true
+        },
+
+        "playwright": {
+            "description": "Playwright - 進階瀏覽器自動化、E2E 測試（對應 Claude Code 的 playwright MCP）",
+            "command": "npx",
+            "args": [
+                "@playwright/mcp@latest"
+            ],
+            "disabled": true
+        },
+
+        "context7": {
+            "description": "Context7 - 即時取得套件最新文件，解決 AI 文件過時問題",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@upstash/context7-mcp"
+            ],
+            "disabled": true
+        },
+
+        "github": {
+            "description": "GitHub - Repo 管理、PR、Issue（需 GitHub Copilot token）",
+            "type": "http",
+            "url": "https://api.githubcopilot.com/mcp/",
+            "headers": {
+                "Authorization": "Bearer YOUR_GITHUB_PERSONAL_ACCESS_TOKEN"
+            },
+            "disabled": true
+        },
+
+        "gitlab": {
+            "description": "GitLab - Repo 管理、MR、Pipeline",
+            "type": "http",
+            "url": "https://gitlab.com/api/v4/mcp",
+            "disabled": true
+        },
+
+        "firebase": {
+            "description": "Firebase - Firestore、Auth、Hosting 管理（需先登入 firebase-tools）",
+            "command": "npx",
+            "args": [
+                "-y",
+                "firebase-tools@latest",
+                "mcp"
+            ],
+            "disabled": true
+        },
+
+        "supabase": {
+            "description": "Supabase - PostgreSQL、Auth、Storage、Edge Functions",
+            "type": "http",
+            "url": "https://mcp.supabase.com/mcp",
+            "disabled": true
+        },
+
+        "terraform": {
+            "description": "Terraform - IaC 管理、Terraform Cloud。需填入 TFE_TOKEN 並安裝 Docker",
+            "command": "docker",
+            "args": [
+                "run",
+                "-i",
+                "--rm",
+                "-e", "TFE_TOKEN=YOUR_TFE_TOKEN",
+                "hashicorp/terraform-mcp-server:0.4.0"
+            ],
+            "disabled": true
+        },
+
+        "greptile": {
+            "description": "Greptile - AI 代碼庫搜尋與理解。需填入 GREPTILE_API_KEY",
+            "type": "http",
+            "url": "https://api.greptile.com/mcp",
+            "headers": {
+                "Authorization": "Bearer YOUR_GREPTILE_API_KEY"
+            },
+            "disabled": true
+        },
+
         "minimax_search": {
-            "description": "MiniMax Search - Powerful web search and intelligent browsing ⭐",
+            "description": "MiniMax Search - 網頁搜尋與智慧瀏覽（需 JINA / SERPER / MINIMAX API Key）",
             "type": "stdio",
             "command": "uvx",
             "args": [
@@ -14,15 +216,6 @@
                 "SERPER_API_KEY": "",
                 "MINIMAX_API_KEY": ""
             },
-            "disabled": true
-        },
-        "memory": {
-            "description": "Memory - Knowledge graph memory system (long-term memory based on graph database)",
-            "command": "npx",
-            "args": [
-                "-y",
-                "@modelcontextprotocol/server-memory"
-            ],
             "disabled": true
         }
     }

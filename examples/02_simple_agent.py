@@ -5,8 +5,10 @@ to perform simple file operations.
 
 Based on: tests/test_agent.py
 """
+# pylint: disable=invalid-name
 
 import asyncio
+import traceback
 import tempfile
 from pathlib import Path
 
@@ -105,10 +107,8 @@ async def demo_file_creation():
             else:
                 print("⚠️  File was not created (but agent may have completed differently)")
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"❌ Error: {e}")
-            import traceback
-
             traceback.print_exc()
 
 
@@ -186,7 +186,7 @@ async def demo_bash_task():
             print("=" * 60)
             print(f"\nAgent's response:\n{result}\n")
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"❌ Error: {e}")
 
 
