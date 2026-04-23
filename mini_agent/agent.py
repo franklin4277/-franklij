@@ -460,7 +460,10 @@ Requirements:
                 else:
                     try:
                         tool = self.tools[function_name]
-                        result = await tool.execute(**arguments)
+                        # Filter arguments to only include parameters defined in tool schema
+                        valid_params = tool.parameters.get('properties', {}).keys()
+                        filtered_args = {k: v for k, v in arguments.items() if k in valid_params}
+                        result = await tool.execute(**filtered_args)
                     except Exception as e:
                         # Catch all exceptions during tool execution, convert to failed ToolResult
                         import traceback
