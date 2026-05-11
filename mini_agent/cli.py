@@ -483,11 +483,43 @@ async def _quiet_cleanup():
         pass
 
 
-async def run_agent(workspace_dir: Path, task: str = None):
+def resolve_workspace_dir(cli_workspace: str | None, config: Config) -> Path:
+    """Resolve the effective workspace directory.
+
+    Precedence (highest first):
+      1. ``--workspace`` CLI argument
+      2. ``workspace_dir`` from config.yaml (``config.agent.workspace_dir``)
+      3. ``Path.cwd()`` (current working directory)
+
+    Relative paths are resolved against the current working directory so the
+    behaviour matches what users see when invoking the CLI from a project root
+    (e.g. ``./workspace`` -> ``<cwd>/workspace``).
+
+    Args:
+        cli_workspace: Raw ``--workspace`` argument value (may be ``None``).
+        config: Loaded :class:`Config` instance.
+
+    Returns:
+        Absolute :class:`Path` to the workspace directory.
+    """
+    if cli_workspace:
+        return Path(cli_workspace).expanduser().resolve()
+
+    config_workspace = config.agent.workspace_dir
+    if config_workspace:
+        return Path(config_workspace).expanduser().resolve()
+
+    return Path.cwd()
+
+
+async def run_agent(cli_workspace: str | None, task: str = None):
     """Run Agent in interactive or non-interactive mode.
 
     Args:
-        workspace_dir: Workspace directory path
+        cli_workspace: Raw ``--workspace`` CLI argument (``None`` if not
+            provided). The effective workspace directory is resolved after
+            loading the configuration so ``workspace_dir`` from ``config.yaml``
+            is honoured when no CLI argument is given.
         task: If provided, execute this task and exit (non-interactive mode)
     """
     session_start = datetime.now()
@@ -534,6 +566,10 @@ async def run_agent(workspace_dir: Path, task: str = None):
     except Exception as e:
         print(f"{Colors.RED}❌ Error: Failed to load configuration file: {e}{Colors.RESET}")
         return
+
+    # 1.5 Resolve workspace directory honouring CLI > config.yaml > cwd precedence
+    workspace_dir = resolve_workspace_dir(cli_workspace, config)
+    workspace_dir.mkdir(parents=True, exist_ok=True)
 
     # 2. Initialize LLM client
     from mini_agent.retry import RetryConfig as RetryConfigBase
@@ -854,19 +890,10 @@ def main():
             show_log_directory(open_file_manager=True)
         return
 
-    # Determine workspace directory
-    # Expand ~ to user home directory for portability
-    if args.workspace:
-        workspace_dir = Path(args.workspace).expanduser().absolute()
-    else:
-        # Use current working directory
-        workspace_dir = Path.cwd()
-
-    # Ensure workspace directory exists
-    workspace_dir.mkdir(parents=True, exist_ok=True)
-
-    # Run the agent (config always loaded from package directory)
-    asyncio.run(run_agent(workspace_dir, task=args.task))
+    # Workspace directory is resolved inside run_agent() after the config has
+    # been loaded, so the precedence ``--workspace`` > ``workspace_dir`` in
+    # config.yaml > ``Path.cwd()`` is honoured uniformly (see #90).
+    asyncio.run(run_agent(args.workspace, task=args.task))
 
 
 if __name__ == "__main__":
