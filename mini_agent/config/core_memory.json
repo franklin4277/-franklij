@@ -1,0 +1,37 @@
+[
+  {
+    "id": "core_001",
+    "content": "Never expose API keys, passwords, or secrets in code, logs, or output.",
+    "category": "safety",
+    "confidence": 1.0,
+    "source": "core"
+  },
+  {
+    "id": "core_002",
+    "content": "Follow the project's existing code style, naming conventions, and architecture patterns. Do not introduce new paradigms without justification.",
+    "category": "convention",
+    "confidence": 1.0,
+    "source": "core"
+  },
+  {
+    "id": "core_003",
+    "content": "Use uv for Python environment management: uv venv, uv pip install, uv run.",
+    "category": "convention",
+    "confidence": 1.0,
+    "source": "core"
+  },
+  {
+    "id": "core_004",
+    "content": "Before making destructive changes (file deletion, git force push, database modifications), confirm with the user first.",
+    "category": "safety",
+    "confidence": 1.0,
+    "source": "core"
+  },
+  {
+    "id": "core_005",
+    "content": "Write tests for all new non-trivial logic. Run the full test suite after changes and verify all tests pass.",
+    "category": "convention",
+    "confidence": 1.0,
+    "source": "core"
+  }
+]

@@ -35,6 +35,7 @@ from mini_agent.tools.base import Tool
 from mini_agent.tools.bash_tool import BashKillTool, BashOutputTool, BashTool
 from mini_agent.tools.file_tools import EditTool, ReadTool, WriteTool
 from mini_agent.tools.mcp_loader import cleanup_mcp_connections, load_mcp_tools_async, set_mcp_timeout_config
+from mini_agent.memory import CoreMemoryTool, EphemeralMemoryTool, LearnedMemoryTool, MemoryManager
 from mini_agent.tools.note_tool import SessionNoteTool
 from mini_agent.tools.skill_tool import create_skill_tools
 from mini_agent.utils import calculate_display_width
@@ -427,8 +428,28 @@ async def initialize_base_tools(config: Config):
         except Exception as e:
             print(f"{Colors.YELLOW}⚠️  Failed to load MCP tools: {e}{Colors.RESET}")
 
+    # 5. Three-layer memory system (CORE / LEARNED / EPHEMERAL)
+    memory_manager = None
+    if config.tools.memory.enabled:
+        print(f"{Colors.BRIGHT_CYAN}Initializing memory system...{Colors.RESET}")
+        core_path = config.tools.memory.core_memory_path or None
+        memory_manager = MemoryManager(
+            core_memory_path=core_path,
+            learned_confidence_threshold=config.tools.memory.learned_confidence_threshold,
+        )
+        memory_manager.reset_ephemeral()
+
+        tools.append(CoreMemoryTool(memory_manager))
+        print(f"{Colors.GREEN}✅ Loaded Core Memory tool{Colors.RESET}")
+
+        tools.append(LearnedMemoryTool(memory_manager))
+        print(f"{Colors.GREEN}✅ Loaded Learned Memory tool (threshold: {config.tools.memory.learned_confidence_threshold}){Colors.RESET}")
+
+        tools.append(EphemeralMemoryTool(memory_manager))
+        print(f"{Colors.GREEN}✅ Loaded Ephemeral Memory tool{Colors.RESET}")
+
     print()  # Empty line separator
-    return tools, skill_loader
+    return tools, skill_loader, memory_manager
 
 
 def add_workspace_tools(tools: List[Tool], config: Config, workspace_dir: Path):
@@ -572,7 +593,7 @@ async def run_agent(workspace_dir: Path, task: str = None):
         print(f"{Colors.GREEN}✅ LLM retry mechanism enabled (max {config.llm.retry.max_retries} retries){Colors.RESET}")
 
     # 3. Initialize base tools (independent of workspace)
-    tools, skill_loader = await initialize_base_tools(config)
+    tools, skill_loader, memory_manager = await initialize_base_tools(config)
 
     # 4. Add workspace-dependent tools
     add_workspace_tools(tools, config, workspace_dir)
@@ -839,6 +860,10 @@ async def run_agent(workspace_dir: Path, task: str = None):
 
     # 11. Cleanup MCP connections
     await _quiet_cleanup()
+
+    # 12. Reset ephemeral memory
+    if memory_manager:
+        memory_manager.reset_ephemeral()
 
 
 def main():
