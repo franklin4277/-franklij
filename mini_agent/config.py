@@ -45,6 +45,14 @@ class MCPConfig(BaseModel):
     sse_read_timeout: float = 120.0  # SSE read timeout (seconds)
 
 
+class MemoryConfig(BaseModel):
+    """Three-layer memory system configuration."""
+
+    enabled: bool = True
+    core_memory_path: str = ""  # Empty = use default ~/.mini-agent/memory/core.json
+    learned_confidence_threshold: float = 0.7
+
+
 class ToolsConfig(BaseModel):
     """Tools configuration"""
 
@@ -61,6 +69,9 @@ class ToolsConfig(BaseModel):
     enable_mcp: bool = True
     mcp_config_path: str = "mcp.json"
     mcp: MCPConfig = Field(default_factory=MCPConfig)
+
+    # Memory system
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
 
 
 class Config(BaseModel):
@@ -146,6 +157,14 @@ class Config(BaseModel):
             sse_read_timeout=mcp_data.get("sse_read_timeout", 120.0),
         )
 
+        # Parse memory configuration
+        memory_data = tools_data.get("memory", {})
+        memory_config = MemoryConfig(
+            enabled=memory_data.get("enabled", True),
+            core_memory_path=memory_data.get("core_memory_path", ""),
+            learned_confidence_threshold=memory_data.get("learned_confidence_threshold", 0.7),
+        )
+
         tools_config = ToolsConfig(
             enable_file_tools=tools_data.get("enable_file_tools", True),
             enable_bash=tools_data.get("enable_bash", True),
@@ -155,6 +174,7 @@ class Config(BaseModel):
             enable_mcp=tools_data.get("enable_mcp", True),
             mcp_config_path=tools_data.get("mcp_config_path", "mcp.json"),
             mcp=mcp_config,
+            memory=memory_config,
         )
 
         return cls(
