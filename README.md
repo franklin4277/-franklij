@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/minimax-ai-mini-agent-badge.png)](https://mseep.ai/app/minimax-ai-mini-agent)
+
 # Mini Agent
 
 English | [中文](./README_CN.md)
