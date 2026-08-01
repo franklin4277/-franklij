@@ -36,8 +36,8 @@ from mini_agent.tools.bash_tool import BashKillTool, BashOutputTool, BashTool
 from mini_agent.tools.file_tools import EditTool, ReadTool, WriteTool
 from mini_agent.tools.mcp_loader import cleanup_mcp_connections, load_mcp_tools_async, set_mcp_timeout_config
 from mini_agent.tools.note_tool import SessionNoteTool
-from mini_agent.tools.skill_tool import create_skill_tools
 from mini_agent.utils import calculate_display_width
+from mini_agent.core.plugins import Plugins
 
 
 # ANSI color codes
@@ -335,73 +335,80 @@ Examples:
     return parser.parse_args()
 
 
+def _resolve_skills_dirs(config: Config) -> list[Path]:
+    """Resolve the configured skills_dir to a list of existing paths.
+
+    Priority: explicit absolute path > CWD/skills > ./mini_agent/skills >
+    package_dir/skills. Returns deduped, existing paths (Plugins iterates
+    without warnings and first-found wins on duplicates).
+    """
+    skills_path = Path(config.tools.skills_dir).expanduser()
+    if skills_path.is_absolute():
+        return [skills_path] if skills_path.exists() else []
+
+    candidates = [
+        skills_path,                                # ./skills (dev)
+        Path("mini_agent") / skills_path,           # ./mini_agent/skills
+        Config.get_package_dir() / skills_path,     # site-packages/.../skills
+    ]
+    # Dedup (in dev mode the last two often resolve to the same path)
+    seen: set[Path] = set()
+    out: list[Path] = []
+    for p in candidates:
+        rp = p.resolve()
+        if rp.exists() and rp not in seen:
+            seen.add(rp)
+            out.append(rp)
+    return out
+
+
 async def initialize_base_tools(config: Config):
-    """Initialize base tools (independent of workspace)
+    """Initialize base tools (independent of workspace).
 
-    These tools are loaded from package configuration and don't depend on workspace.
-    Note: File tools are now workspace-dependent and initialized in add_workspace_tools()
-
-    Args:
-        config: Configuration object
+    Tools come from three sources:
+      1. Manual: BashOutputTool, BashKillTool (workspace-independent)
+      2. MCP: loaded directly via load_mcp_tools_async (preserves timeout config)
+      3. Skills: exposed via Plugins registry (the `run_skill` tool)
 
     Returns:
-        Tuple of (list of tools, skill loader if skills enabled)
+        Tuple of (tools list, Plugins instance or None).
+        The caller should pass plugins to Agent so the run_skill tool
+        is auto-registered and skill metadata is injected into system prompt.
     """
 
     tools = []
-    skill_loader = None
+    plugins = None
 
     # 1. Bash auxiliary tools (output monitoring and kill)
     # Note: BashTool itself is created in add_workspace_tools() with workspace_dir as cwd
     if config.tools.enable_bash:
-        bash_output_tool = BashOutputTool()
-        tools.append(bash_output_tool)
+        tools.append(BashOutputTool())
         print(f"{Colors.GREEN}✅ Loaded Bash Output tool{Colors.RESET}")
-
-        bash_kill_tool = BashKillTool()
-        tools.append(bash_kill_tool)
+        tools.append(BashKillTool())
         print(f"{Colors.GREEN}✅ Loaded Bash Kill tool{Colors.RESET}")
 
-    # 3. Claude Skills (loaded from package directory)
+    # 3. Skills via Plugins registry
     if config.tools.enable_skills:
-        print(f"{Colors.BRIGHT_CYAN}Loading Claude Skills...{Colors.RESET}")
         try:
-            # Resolve skills directory with priority search
-            # Expand ~ to user home directory for portability
-            skills_path = Path(config.tools.skills_dir).expanduser()
-            if skills_path.is_absolute():
-                skills_dir = str(skills_path)
+            skills_dirs = _resolve_skills_dirs(config)
+            if skills_dirs:
+                print(f"{Colors.BRIGHT_CYAN}Loading Claude Skills...{Colors.RESET}")
+                plugins = Plugins(skills_dirs=skills_dirs)
+                n = plugins.discover_skills()
+                if n:
+                    print(f"{Colors.GREEN}✅ Discovered {n} Skills (run_skill tool registered){Colors.RESET}")
+                else:
+                    print(f"{Colors.YELLOW}⚠️  No available Skills found{Colors.RESET}")
             else:
-                # Search in priority order:
-                # 1. Current directory (dev mode: ./skills or ./mini_agent/skills)
-                # 2. Package directory (installed: site-packages/mini_agent/skills)
-                search_paths = [
-                    skills_path,  # ./skills for backward compatibility
-                    Path("mini_agent") / skills_path,  # ./mini_agent/skills
-                    Config.get_package_dir() / skills_path,  # site-packages/mini_agent/skills
-                ]
-
-                # Find first existing path
-                skills_dir = str(skills_path)  # default
-                for path in search_paths:
-                    if path.exists():
-                        skills_dir = str(path.resolve())
-                        break
-
-            skill_tools, skill_loader = create_skill_tools(skills_dir)
-            if skill_tools:
-                tools.extend(skill_tools)
-                print(f"{Colors.GREEN}✅ Loaded Skill tool (get_skill){Colors.RESET}")
-            else:
-                print(f"{Colors.YELLOW}⚠️  No available Skills found{Colors.RESET}")
+                print(f"{Colors.YELLOW}⚠️  Skills directory not found: {config.tools.skills_dir}{Colors.RESET}")
         except Exception as e:
+            plugins = None
             print(f"{Colors.YELLOW}⚠️  Failed to load Skills: {e}{Colors.RESET}")
 
     # 4. MCP tools (loaded with priority search)
     if config.tools.enable_mcp:
         print(f"{Colors.BRIGHT_CYAN}Loading MCP tools...{Colors.RESET}")
         try:
-            # Apply MCP timeout configuration from config.yaml
             mcp_config = config.tools.mcp
             set_mcp_timeout_config(
                 connect_timeout=mcp_config.connect_timeout,
@@ -413,7 +420,6 @@ async def initialize_base_tools(config: Config):
                 f"execute={mcp_config.execute_timeout}s, sse_read={mcp_config.sse_read_timeout}s{Colors.RESET}"
             )
 
-            # Use priority search for mcp.json
             mcp_config_path = Config.find_config_file(config.tools.mcp_config_path)
             if mcp_config_path:
                 mcp_tools = await load_mcp_tools_async(str(mcp_config_path))
@@ -428,29 +434,21 @@ async def initialize_base_tools(config: Config):
             print(f"{Colors.YELLOW}⚠️  Failed to load MCP tools: {e}{Colors.RESET}")
 
     print()  # Empty line separator
-    return tools, skill_loader
+    return tools, plugins
 
 
 def add_workspace_tools(tools: List[Tool], config: Config, workspace_dir: Path):
-    """Add workspace-dependent tools
+    """Add workspace-dependent tools (file/bash/note).
 
-    These tools need to know the workspace directory.
-
-    Args:
-        tools: Existing tools list to add to
-        config: Configuration object
-        workspace_dir: Workspace directory path
+    Data agent is registered separately after Agent creation (via plugin).
     """
-    # Ensure workspace directory exists
     workspace_dir.mkdir(parents=True, exist_ok=True)
 
-    # Bash tool - needs workspace as cwd for command execution
     if config.tools.enable_bash:
         bash_tool = BashTool(workspace_dir=str(workspace_dir))
         tools.append(bash_tool)
         print(f"{Colors.GREEN}✅ Loaded Bash tool (cwd: {workspace_dir}){Colors.RESET}")
 
-    # File tools - need workspace to resolve relative paths
     if config.tools.enable_file_tools:
         tools.extend(
             [
@@ -461,7 +459,6 @@ def add_workspace_tools(tools: List[Tool], config: Config, workspace_dir: Path):
         )
         print(f"{Colors.GREEN}✅ Loaded file operation tools (workspace: {workspace_dir}){Colors.RESET}")
 
-    # Session note tool - needs workspace to store memory file
     if config.tools.enable_note:
         tools.append(SessionNoteTool(memory_file=str(workspace_dir / ".agent_memory.json")))
         print(f"{Colors.GREEN}✅ Loaded session note tool{Colors.RESET}")
@@ -572,7 +569,7 @@ async def run_agent(workspace_dir: Path, task: str = None):
         print(f"{Colors.GREEN}✅ LLM retry mechanism enabled (max {config.llm.retry.max_retries} retries){Colors.RESET}")
 
     # 3. Initialize base tools (independent of workspace)
-    tools, skill_loader = await initialize_base_tools(config)
+    tools, plugins = await initialize_base_tools(config)
 
     # 4. Add workspace-dependent tools
     add_workspace_tools(tools, config, workspace_dir)
@@ -586,19 +583,8 @@ async def run_agent(workspace_dir: Path, task: str = None):
         system_prompt = "You are Mini-Agent, an intelligent assistant powered by MiniMax M2.5 that can help users complete various tasks."
         print(f"{Colors.YELLOW}⚠️  System prompt not found, using default{Colors.RESET}")
 
-    # 6. Inject Skills Metadata into System Prompt (Progressive Disclosure - Level 1)
-    if skill_loader:
-        skills_metadata = skill_loader.get_skills_metadata_prompt()
-        if skills_metadata:
-            # Replace placeholder with actual metadata
-            system_prompt = system_prompt.replace("{SKILLS_METADATA}", skills_metadata)
-            print(f"{Colors.GREEN}✅ Injected {len(skill_loader.loaded_skills)} skills metadata into system prompt{Colors.RESET}")
-        else:
-            # Remove placeholder if no skills
-            system_prompt = system_prompt.replace("{SKILLS_METADATA}", "")
-    else:
-        # Remove placeholder if skills not enabled
-        system_prompt = system_prompt.replace("{SKILLS_METADATA}", "")
+    # 6. Skills metadata is injected by Agent.__init__ via the plugins arg,
+    #    which replaces {SKILLS_METADATA} in the system prompt automatically.
 
     # 7. Create Agent
     agent = Agent(
@@ -607,6 +593,7 @@ async def run_agent(workspace_dir: Path, task: str = None):
         tools=tools,
         max_steps=config.agent.max_steps,
         workspace_dir=str(workspace_dir),
+        plugins=plugins,
     )
 
     # 8. Display welcome information

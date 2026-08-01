@@ -77,12 +77,14 @@ class MiniMaxACPAgent:
         llm: LLMClient,
         base_tools: list,
         system_prompt: str,
+        plugins=None,
     ):
         self._conn = conn
         self._config = config
         self._llm = llm
         self._base_tools = base_tools
         self._system_prompt = system_prompt
+        self._plugins = plugins
         self._sessions: dict[str, SessionState] = {}
 
     async def initialize(self, params: InitializeRequest) -> InitializeResponse:  # noqa: ARG002
@@ -99,7 +101,7 @@ class MiniMaxACPAgent:
             workspace = workspace.resolve()
         tools = list(self._base_tools)
         add_workspace_tools(tools, self._config, workspace)
-        agent = Agent(llm_client=self._llm, system_prompt=self._system_prompt, tools=tools, max_steps=self._config.agent.max_steps, workspace_dir=str(workspace))
+        agent = Agent(llm_client=self._llm, system_prompt=self._system_prompt, tools=tools, max_steps=self._config.agent.max_steps, workspace_dir=str(workspace), plugins=self._plugins)
         self._sessions[session_id] = SessionState(agent=agent)
         return NewSessionResponse(sessionId=session_id)
 
@@ -172,20 +174,16 @@ async def run_acp_server(config: Config | None = None) -> None:
     """Run Mini-Agent as an ACP-compatible stdio server."""
     config = config or Config.load()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-    base_tools, skill_loader = await initialize_base_tools(config)
+    base_tools, plugins = await initialize_base_tools(config)
     prompt_path = Config.find_config_file(config.agent.system_prompt_path)
     if prompt_path and prompt_path.exists():
         system_prompt = prompt_path.read_text(encoding="utf-8")
     else:
         system_prompt = "You are a helpful AI assistant."
-    if skill_loader:
-        meta = skill_loader.get_skills_metadata_prompt()
-        if meta:
-            system_prompt = f"{system_prompt.rstrip()}\n\n{meta}"
     rcfg = config.llm.retry
     llm = LLMClient(api_key=config.llm.api_key, api_base=config.llm.api_base, model=config.llm.model, retry_config=RetryConfigBase(enabled=rcfg.enabled, max_retries=rcfg.max_retries, initial_delay=rcfg.initial_delay, max_delay=rcfg.max_delay, exponential_base=rcfg.exponential_base))
     reader, writer = await stdio_streams()
-    AgentSideConnection(lambda conn: MiniMaxACPAgent(conn, config, llm, base_tools, system_prompt), writer, reader)
+    AgentSideConnection(lambda conn: MiniMaxACPAgent(conn, config, llm, base_tools, system_prompt, plugins=plugins), writer, reader)
     logger.info("Mini-Agent ACP server running")
     await asyncio.Event().wait()
 

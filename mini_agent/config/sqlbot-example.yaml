@@ -1,0 +1,32 @@
+# SQLBot (问数 Agent) 配置示例
+#
+# 此文件与 config.yaml 同目录，作为 config.yaml 的 `sqlbot:` 节
+# 或独立加载。
+#
+# 默认本地 SQLBot 容器：
+#   docker run -d --name sqlbot -p 18000:8000 -p 18001:8001 dataease/sqlbot
+# 默认账号：admin / SQLBot@123456
+
+sqlbot:
+  # API + 图片 双端口（容器内 8000/8001）
+  api_base: "http://localhost:18000"
+  image_base: "http://localhost:18001"
+
+  username: "admin"
+  password: "SQLBot@123456"
+
+  # 工作空间 ID（必须是字符串，SQLBot schema 决定）
+  workspace_id: "1"
+
+  # 默认数据源 ID（可选；省略则让用户每次指定或 SQLBot 自动选）
+  # default_datasource_id: 9
+
+  # 请求超时（秒）
+  request_timeout: 60.0
+
+  # token 失效时自动重登次数
+  auto_retry: 1
+
+# 会话持久化（无需改；按默认即可）
+# session:
+#   persist_path: "<workspace>/.sqlbot_session.json"

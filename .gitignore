@@ -35,7 +35,20 @@ env/
 
 # Workspace
 workspace/
+workspace_api/
+workspace_data/
+sess-*/
 *.log
+
+# Local data / business artifacts (not for the repo)
+storage/
+
+# Web build artifacts
+web/node_modules/
+web/.next/
+web/out/
+web/.env*
+web/coverage/
 
 # OS
 .DS_Store

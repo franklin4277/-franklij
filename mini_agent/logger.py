@@ -1,86 +1,69 @@
-"""Agent run logger"""
+"""Logging and retry utilities.
 
+Combines two related concerns:
+    AgentLogger       — file-based structured run logger (~/.mini-agent/log/)
+    async_retry       — exponential-backoff retry decorator with config
+
+Backward-compat re-exports:
+    from mini_agent.logger import AgentLogger              # primary
+    from mini_agent.retry import RetryConfig, async_retry  # shim → logger
+"""
+from __future__ import annotations
+
+import asyncio
+import functools
 import json
+import logging as _logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Type, TypeVar
 
 from .schema import Message, ToolCall
 
+logger = _logging.getLogger(__name__)
 
+T = TypeVar("T")
+
+
+# ---- Agent run logger --------------------------------------------------------
 class AgentLogger:
-    """Agent run logger
+    """Records the complete interaction of each agent run.
 
-    Responsible for recording the complete interaction process of each agent run, including:
-    - LLM requests and responses
-    - Tool calls and results
+    Files written to ~/.mini-agent/log/.
     """
 
     def __init__(self):
-        """Initialize logger
-
-        Logs are stored in ~/.mini-agent/log/ directory
-        """
-        # Use ~/.mini-agent/log/ directory for logs
         self.log_dir = Path.home() / ".mini-agent" / "log"
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        self.log_file = None
+        self.log_file: Path | None = None
         self.log_index = 0
 
     def start_new_run(self):
-        """Start new run, create new log file"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_filename = f"agent_run_{timestamp}.log"
-        self.log_file = self.log_dir / log_filename
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.log_file = self.log_dir / f"agent_run_{ts}.log"
         self.log_index = 0
-
-        # Write log header
         with open(self.log_file, "w", encoding="utf-8") as f:
             f.write("=" * 80 + "\n")
             f.write(f"Agent Run Log - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write("=" * 80 + "\n\n")
 
     def log_request(self, messages: list[Message], tools: list[Any] | None = None):
-        """Log LLM request
-
-        Args:
-            messages: Message list
-            tools: Tool list (optional)
-        """
         self.log_index += 1
-
-        # Build complete request data structure
-        request_data = {
-            "messages": [],
-            "tools": [],
-        }
-
-        # Convert messages to JSON serializable format
+        req = {"messages": [], "tools": []}
         for msg in messages:
-            msg_dict = {
-                "role": msg.role,
-                "content": msg.content,
-            }
+            d = {"role": msg.role, "content": msg.content}
             if msg.thinking:
-                msg_dict["thinking"] = msg.thinking
+                d["thinking"] = msg.thinking
             if msg.tool_calls:
-                msg_dict["tool_calls"] = [tc.model_dump() for tc in msg.tool_calls]
+                d["tool_calls"] = [tc.model_dump() for tc in msg.tool_calls]
             if msg.tool_call_id:
-                msg_dict["tool_call_id"] = msg.tool_call_id
+                d["tool_call_id"] = msg.tool_call_id
             if msg.name:
-                msg_dict["name"] = msg.name
-
-            request_data["messages"].append(msg_dict)
-
-        # Only record tool names
+                d["name"] = msg.name
+            req["messages"].append(d)
         if tools:
-            request_data["tools"] = [tool.name for tool in tools]
-
-        # Format as JSON
-        content = "LLM Request:\n\n"
-        content += json.dumps(request_data, indent=2, ensure_ascii=False)
-
-        self._write_log("REQUEST", content)
+            req["tools"] = [t.name for t in tools]
+        self._write_log("REQUEST", "LLM Request:\n\n" + json.dumps(req, indent=2, ensure_ascii=False))
 
     def log_response(
         self,
@@ -89,35 +72,15 @@ class AgentLogger:
         tool_calls: list[ToolCall] | None = None,
         finish_reason: str | None = None,
     ):
-        """Log LLM response
-
-        Args:
-            content: Response content
-            thinking: Thinking content (optional)
-            tool_calls: Tool call list (optional)
-            finish_reason: Finish reason (optional)
-        """
         self.log_index += 1
-
-        # Build complete response data structure
-        response_data = {
-            "content": content,
-        }
-
+        d = {"content": content}
         if thinking:
-            response_data["thinking"] = thinking
-
+            d["thinking"] = thinking
         if tool_calls:
-            response_data["tool_calls"] = [tc.model_dump() for tc in tool_calls]
-
+            d["tool_calls"] = [tc.model_dump() for tc in tool_calls]
         if finish_reason:
-            response_data["finish_reason"] = finish_reason
-
-        # Format as JSON
-        log_content = "LLM Response:\n\n"
-        log_content += json.dumps(response_data, indent=2, ensure_ascii=False)
-
-        self._write_log("RESPONSE", log_content)
+            d["finish_reason"] = finish_reason
+        self._write_log("RESPONSE", "LLM Response:\n\n" + json.dumps(d, indent=2, ensure_ascii=False))
 
     def log_tool_result(
         self,
@@ -127,45 +90,17 @@ class AgentLogger:
         result_content: str | None = None,
         result_error: str | None = None,
     ):
-        """Log tool execution result
-
-        Args:
-            tool_name: Tool name
-            arguments: Tool arguments
-            result_success: Whether successful
-            result_content: Result content (on success)
-            result_error: Error message (on failure)
-        """
         self.log_index += 1
-
-        # Build complete tool execution result data structure
-        tool_result_data = {
-            "tool_name": tool_name,
-            "arguments": arguments,
-            "success": result_success,
-        }
-
+        d = {"tool_name": tool_name, "arguments": arguments, "success": result_success}
         if result_success:
-            tool_result_data["result"] = result_content
+            d["result"] = result_content
         else:
-            tool_result_data["error"] = result_error
-
-        # Format as JSON
-        content = "Tool Execution:\n\n"
-        content += json.dumps(tool_result_data, indent=2, ensure_ascii=False)
-
-        self._write_log("TOOL_RESULT", content)
+            d["error"] = result_error
+        self._write_log("TOOL_RESULT", "Tool Execution:\n\n" + json.dumps(d, indent=2, ensure_ascii=False))
 
     def _write_log(self, log_type: str, content: str):
-        """Write log entry
-
-        Args:
-            log_type: Log type (REQUEST, RESPONSE, TOOL_RESULT)
-            content: Log content
-        """
         if self.log_file is None:
             return
-
         with open(self.log_file, "a", encoding="utf-8") as f:
             f.write("\n" + "-" * 80 + "\n")
             f.write(f"[{self.log_index}] {log_type}\n")
@@ -173,6 +108,91 @@ class AgentLogger:
             f.write("-" * 80 + "\n")
             f.write(content + "\n")
 
-    def get_log_file_path(self) -> Path:
-        """Get current log file path"""
+    def get_log_file_path(self) -> Path | None:
         return self.log_file
+
+
+# ---- Retry decorators --------------------------------------------------------
+class RetryConfig:
+    """Retry configuration. Plain dataclass-style (not Pydantic).
+
+    Note: config.RetryConfig is the Pydantic version loaded from YAML;
+    this is the runtime version used by decorators. They have the same
+    fields but different types.
+    """
+
+    def __init__(
+        self,
+        enabled: bool = True,
+        max_retries: int = 3,
+        initial_delay: float = 1.0,
+        max_delay: float = 60.0,
+        exponential_base: float = 2.0,
+        retryable_exceptions: tuple[Type[Exception], ...] = (Exception,),
+    ):
+        self.enabled = enabled
+        self.max_retries = max_retries
+        self.initial_delay = initial_delay
+        self.max_delay = max_delay
+        self.exponential_base = exponential_base
+        self.retryable_exceptions = retryable_exceptions
+
+    def calculate_delay(self, attempt: int) -> float:
+        delay = self.initial_delay * (self.exponential_base**attempt)
+        return min(delay, self.max_delay)
+
+
+class RetryExhaustedError(Exception):
+    """Raised when async_retry gives up after max_retries."""
+
+    def __init__(self, last_exception: Exception, attempts: int):
+        self.last_exception = last_exception
+        self.attempts = attempts
+        super().__init__(f"Retry failed after {attempts} attempts. Last error: {last_exception}")
+
+
+def async_retry(
+    config: RetryConfig | None = None,
+    on_retry: Callable[[Exception, int], None] | None = None,
+) -> Callable:
+    """Async function retry decorator with exponential backoff."""
+    if config is None:
+        config = RetryConfig()
+
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(func)
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            last_exception: Exception | None = None
+            for attempt in range(config.max_retries + 1):
+                try:
+                    return await func(*args, **kwargs)
+                except config.retryable_exceptions as e:
+                    last_exception = e
+                    if attempt >= config.max_retries:
+                        logger.error(
+                            f"Function {func.__name__} retry failed, reached maximum retry count {config.max_retries}"
+                        )
+                        raise RetryExhaustedError(e, attempt + 1)
+                    delay = config.calculate_delay(attempt)
+                    logger.warning(
+                        f"Function {func.__name__} call {attempt + 1} failed: {e}, "
+                        f"retrying attempt {attempt + 2} after {delay:.2f} seconds"
+                    )
+                    if on_retry:
+                        on_retry(e, attempt + 1)
+                    await asyncio.sleep(delay)
+            if last_exception:
+                raise last_exception
+            raise Exception("Unknown error")
+
+        return wrapper
+
+    return decorator
+
+
+__all__ = [
+    "AgentLogger",
+    "RetryConfig",
+    "RetryExhaustedError",
+    "async_retry",
+]

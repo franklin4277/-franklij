@@ -1,6 +1,9 @@
-"""Schema definitions for Mini-Agent."""
+"""Backward-compat shim. Use mini_agent.schema instead.
 
-from .schema import (
+Old code path: `from mini_agent.schema import Message`
+New code path: same (re-exported from new single-file schema)
+"""
+from .schema import (  # noqa: F401
     FunctionCall,
     LLMProvider,
     LLMResponse,

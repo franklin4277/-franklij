@@ -164,9 +164,8 @@ These examples are all refined from test cases in the `tests/` directory:
 
 ### Path 3: Production Application
 1. Understand all examples
-2. Read [Production Deployment Guide](../docs/PRODUCTION_GUIDE.md)
-3. Configure MCP tools and Skills
-4. Extend tool set based on needs
+2. Configure MCP tools and Skills
+3. Extend tool set based on needs
 
 ---
 
@@ -200,7 +199,6 @@ cp mini_agent/config/config-example.yaml mini_agent/config/config.yaml
 - [Main Project README](../README.md) - Complete project documentation
 - [Test Cases](../tests/) - More usage examples
 - [Core Implementation](../mini_agent/) - Source code
-- [Production Guide](../docs/PRODUCTION_GUIDE.md) - Deployment guide
 
 ---
 

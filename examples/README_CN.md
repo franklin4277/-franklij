@@ -164,9 +164,8 @@ python examples/02_simple_agent.py
 
 ### 路径 3: 生产应用
 1. 理解所有示例
-2. 阅读 [生产环境部署指南](../docs/PRODUCTION_GUIDE.md)
-3. 配置 MCP 工具和 Skills
-4. 根据需求扩展工具集
+2. 配置 MCP 工具和 Skills
+3. 根据需求扩展工具集
 
 ---
 
@@ -200,7 +199,6 @@ cp mini_agent/config/config-example.yaml mini_agent/config/config.yaml
 - [项目主 README](../README.md) - 完整项目文档
 - [测试用例](../tests/) - 更多使用示例
 - [核心实现](../mini_agent/) - 源代码
-- [生产环境指南](../docs/PRODUCTION_GUIDE.md) - 部署指南
 
 ---
 

@@ -205,10 +205,6 @@ mini-agent
 mini-agent --workspace /path/to/your/project
 ```
 
-> 📖 For more development guidance, see [Development Guide](docs/DEVELOPMENT_GUIDE.md)
-
-> 📖 For more production deployment guidance, see [Production Guide](docs/PRODUCTION_GUIDE.md)
-
 ## ACP & Zed Editor Integration(optional)
 
 Mini Agent supports the [Agent Communication Protocol (ACP)](https://github.com/modelcontextprotocol/protocol) for integration with code editors like Zed.
@@ -310,9 +306,6 @@ python -m mini_agent.cli
 ```
 
 ## Related Documentation
-
-- [Development Guide](docs/DEVELOPMENT_GUIDE.md) - Detailed development and configuration guidance
-- [Production Guide](docs/PRODUCTION_GUIDE.md) - Best practices for production deployment
 
 ## Community
 

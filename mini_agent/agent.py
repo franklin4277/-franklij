@@ -13,6 +13,7 @@ from .logger import AgentLogger
 from .schema import Message
 from .tools.base import Tool, ToolResult
 from .utils import calculate_display_width
+from .core.events import AgentCompletedEvent
 
 
 # ANSI color codes
@@ -49,13 +50,33 @@ class Agent:
         self,
         llm_client: LLMClient,
         system_prompt: str,
-        tools: list[Tool],
+        tools: list[Tool] | None = None,
         max_steps: int = 50,
         workspace_dir: str = "./workspace",
         token_limit: int = 80000,  # Summary triggered when tokens exceed this value
+        plugins: "PluginRegistry | None" = None,
     ):
         self.llm = llm_client
-        self.tools = {tool.name: tool for tool in tools}
+        # Tools come from three sources (in order):
+        #   1. `plugins` registry (Tools + MCP + Skills) - the new way
+        #   2. `tools` list (legacy / direct) - backward compatible
+        self.plugins = plugins
+        base_tools: list[Tool] = list(tools or [])
+        if plugins is not None:
+            base_tools.extend(plugins.all_tools())
+            # Append skills' system prompt additions
+            skill_prompt = plugins.system_prompt_addition()
+            if skill_prompt and "{SKILLS_METADATA}" in system_prompt:
+                system_prompt = system_prompt.replace("{SKILLS_METADATA}", skill_prompt)
+            elif skill_prompt:
+                system_prompt = system_prompt + "\n\n" + skill_prompt
+            elif "{SKILLS_METADATA}" in system_prompt:
+                # Plugins enabled but no skills discovered: strip the placeholder
+                # so the literal token never reaches the LLM.
+                system_prompt = system_prompt.replace("{SKILLS_METADATA}", "")
+        elif "{SKILLS_METADATA}" in system_prompt:
+            system_prompt = system_prompt.replace("{SKILLS_METADATA}", "")
+        self.tools = {tool.name: tool for tool in base_tools}
         self.max_steps = max_steps
         self.token_limit = token_limit
         self.workspace_dir = Path(workspace_dir)
@@ -82,6 +103,82 @@ class Agent:
         self.api_total_tokens: int = 0
         # Flag to skip token check right after summary (avoid consecutive triggers)
         self._skip_next_token_check: bool = False
+
+    def add_tool(self, tool) -> None:
+        """Register a tool after Agent construction (e.g. from a plugin)."""
+        self.tools[tool.name] = tool
+
+    async def run_with_orchestrator(
+        self,
+        message: str,
+        cancel_event=None,
+        max_steps: int | None = None,
+    ) -> str:
+        """Run the agent via ReActOrchestrator (new path, no rich CLI output).
+
+        Use this for SSE streaming, sub-agents, or when you want plain
+        output. For the rich CLI experience, use the legacy run() instead.
+
+        Returns the final assistant message text.
+        """
+        from .core.orchestrator import ReActOrchestrator
+
+        if cancel_event is not None:
+            self.cancel_event = cancel_event
+        steps = max_steps or self.max_steps
+
+        result = None
+        async for ev in self.stream(message, max_steps=steps):
+            if isinstance(ev, AgentCompletedEvent):
+                result = ev.final_result
+        return result or ""
+
+    async def execute_tool(self, tool_call) -> ToolResult:
+        """Execute a single tool call. Used by Orchestrator.
+
+        Args:
+            tool_call: object with .id, .function.name, .function.arguments
+
+        Returns:
+            ToolResult
+        """
+        function_name = tool_call.function.name
+        arguments = tool_call.function.arguments or {}
+        if function_name not in self.tools:
+            return ToolResult(
+                success=False,
+                content="",
+                error=f"Unknown tool: {function_name}",
+            )
+        try:
+            tool = self.tools[function_name]
+            result = await tool.execute(**arguments)
+            return result
+        except Exception as e:
+            import traceback
+            error_detail = f"{type(e).__name__}: {str(e)}"
+            traceback.print_exc()
+            return ToolResult(success=False, content="", error=error_detail)
+
+    async def stream(self, message: str, **opts):
+        """Stream AgentEvents via Orchestrator (new API).
+
+        Yields AgentEvent instances. Does NOT replace run() (which has
+        richer logging/output). Use this for streaming UI / sub-agents.
+
+        Usage:
+            async for event in agent.stream("query"):
+                if isinstance(event, AgentCompletedEvent):
+                    print(event.final_result)
+        """
+        from .core.orchestrator import ReActOrchestrator
+        from .core.events import AgentCompletedEvent
+
+        # Add user message to history
+        self.add_user_message(message)
+        orch = ReActOrchestrator(max_steps=self.max_steps)
+        async for event in orch.stream(self, message, **opts):
+            yield event
 
     def add_user_message(self, content: str):
         """Add a user message to history."""
