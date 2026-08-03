@@ -469,7 +469,7 @@ Requirements:
                 response = await self.llm.generate(messages=self.messages, tools=tool_list)
             except Exception as e:
                 # Check if it's a retry exhausted error
-                from .retry import RetryExhaustedError
+                from .logger import RetryExhaustedError
 
                 if isinstance(e, RetryExhaustedError):
                     error_msg = f"LLM call failed after {e.attempts} retries\nLast error: {str(e.last_exception)}"

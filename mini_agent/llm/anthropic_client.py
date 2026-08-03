@@ -5,7 +5,7 @@ from typing import Any
 
 import anthropic
 
-from ..retry import RetryConfig, async_retry
+from ..logger import RetryConfig, async_retry
 from ..schema import FunctionCall, LLMResponse, Message, TokenUsage, ToolCall
 from .base import LLMClientBase
 

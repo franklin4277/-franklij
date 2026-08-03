@@ -535,7 +535,7 @@ async def run_agent(workspace_dir: Path, task: str = None):
         return
 
     # 2. Initialize LLM client
-    from mini_agent.retry import RetryConfig as RetryConfigBase
+    from mini_agent.logger import RetryConfig as RetryConfigBase
 
     # Convert configuration format
     retry_config = RetryConfigBase(

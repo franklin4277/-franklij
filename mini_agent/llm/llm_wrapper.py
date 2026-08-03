@@ -6,7 +6,7 @@ This module provides a unified interface for different LLM providers
 
 import logging
 
-from ..retry import RetryConfig
+from ..logger import RetryConfig
 from ..schema import LLMProvider, LLMResponse, Message
 from .anthropic_client import AnthropicClient
 from .base import LLMClientBase

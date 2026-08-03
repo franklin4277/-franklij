@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from ..retry import RetryConfig
+from ..logger import RetryConfig
 from ..schema import LLMResponse, Message
 
 
