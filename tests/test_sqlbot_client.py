@@ -6,14 +6,16 @@ import os
 
 import pytest
 
-from mini_agent.data_agent import (
+from mini_agent.connectors.sqlbot import (
     SqlBotClient,
     SqlBotConfig,
     SqlBotError,
-    Session,
-    SessionStore,
     decode_sql_b64,
     parse_data_envelope,
+)
+from mini_agent.memory.session import (
+    Session,
+    SessionStore,
 )
 
 

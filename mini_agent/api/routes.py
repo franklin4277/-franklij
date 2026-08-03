@@ -21,9 +21,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from .deps import AskResult, AskService
-from mini_agent.data_agent import (
-    SessionStore,
-)
+from mini_agent.memory.session import SessionStore
 from mini_agent.core.events import (
     AgentStartedEvent,
     AgentStepEvent,

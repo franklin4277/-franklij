@@ -13,12 +13,9 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
-from mini_agent.data_agent import (
-    SessionStore,
-    SqlBotClient,
-    decode_sql_b64,
-    render_answer_md,
-)
+from mini_agent.connectors.sqlbot import SqlBotClient, decode_sql_b64
+from mini_agent.memory.session import SessionStore
+from mini_agent.render import render_answer_md
 
 import yaml as _yaml
 
