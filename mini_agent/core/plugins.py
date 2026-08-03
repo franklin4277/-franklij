@@ -21,7 +21,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from ..tools.base import Tool, ToolResult
+from ..tools.builtin.base import Tool, ToolResult
 from .skill import Skill, SkillManager, load_skill
 
 logger = logging.getLogger(__name__)
@@ -213,7 +213,7 @@ class Plugins:
         if self._mcp_loaded:
             return
         try:
-            from ..tools.mcp_loader import load_mcp_tools_async
+            from ..tools.loaders.mcp_loader import load_mcp_tools_async
 
             tools = await load_mcp_tools_async(config_path)
             self._mcp_tools.extend(tools)
@@ -226,7 +226,7 @@ class Plugins:
     async def cleanup_mcp(self) -> None:
         """Disconnect all MCP servers."""
         try:
-            from ..tools.mcp_loader import cleanup_mcp_connections
+            from ..tools.loaders.mcp_loader import cleanup_mcp_connections
 
             await cleanup_mcp_connections()
         except Exception:
