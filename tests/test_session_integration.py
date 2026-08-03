@@ -11,9 +11,9 @@ import pytest
 from mini_agent import LLMClient
 from mini_agent.agent import Agent
 from mini_agent.schema import LLMResponse, Message
-from mini_agent.tools.bash_tool import BashTool
-from mini_agent.tools.file_tools import ReadTool, WriteTool
-from mini_agent.tools.note_tool import RecallNoteTool, SessionNoteTool
+from mini_agent.tools.builtin.bash_tool import BashTool
+from mini_agent.tools.builtin.file_tools import ReadTool, WriteTool
+from mini_agent.tools.builtin.note_tool import RecallNoteTool, SessionNoteTool
 
 
 @pytest.fixture

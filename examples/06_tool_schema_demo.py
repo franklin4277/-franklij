@@ -11,7 +11,7 @@ import yaml
 
 from mini_agent import LLMClient, LLMProvider
 from mini_agent.schema import Message
-from mini_agent.tools.base import Tool, ToolResult
+from mini_agent.tools import Tool, ToolResult
 
 
 def load_config():

@@ -7,7 +7,7 @@ import pytest
 from mini_agent.acp import MiniMaxACPAgent
 from mini_agent.config import AgentConfig, Config, LLMConfig, ToolsConfig
 from mini_agent.schema import FunctionCall, LLMResponse, ToolCall
-from mini_agent.tools.base import Tool, ToolResult
+from mini_agent.tools import Tool, ToolResult
 
 
 class DummyConn:

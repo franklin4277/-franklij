@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from mini_agent.tools.mcp_loader import (
+from mini_agent.tools.loaders.mcp_loader import (
     MCPServerConnection,
     MCPTimeoutConfig,
     _determine_connection_type,

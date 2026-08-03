@@ -10,9 +10,8 @@ import pytest
 from mini_agent import LLMClient
 from mini_agent.agent import Agent
 from mini_agent.config import Config
-from mini_agent.tools import BashTool, EditTool, ReadTool, WriteTool
-from mini_agent.tools.mcp_loader import load_mcp_tools_async
-from mini_agent.tools.note_tool import RecallNoteTool, SessionNoteTool
+from mini_agent.tools import BashTool, EditTool, ReadTool, RecallNoteTool, SessionNoteTool, WriteTool
+from mini_agent.tools.loaders.mcp_loader import load_mcp_tools_async
 
 
 @pytest.mark.asyncio

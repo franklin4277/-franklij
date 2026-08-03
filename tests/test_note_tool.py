@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from mini_agent.tools.note_tool import RecallNoteTool, SessionNoteTool
+from mini_agent.tools import RecallNoteTool, SessionNoteTool
 
 
 @pytest.mark.asyncio

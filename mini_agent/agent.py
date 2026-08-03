@@ -11,7 +11,7 @@ import tiktoken
 from .llm import LLMClient
 from .logger import AgentLogger
 from .schema import Message
-from .tools.base import Tool, ToolResult
+from .tools import Tool, ToolResult
 from .utils import calculate_display_width
 from .core.events import AgentCompletedEvent
 
