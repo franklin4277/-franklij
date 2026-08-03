@@ -38,7 +38,7 @@ from mini_agent.tools.loaders.mcp_loader import (
     set_mcp_timeout_config,
 )
 from mini_agent.tools.builtin.bash_tool import BashKillTool, BashOutputTool
-from mini_agent.utils import calculate_display_width
+from mini_agent.terminal import calculate_display_width
 from mini_agent.core.plugins import Plugins
 
 

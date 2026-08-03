@@ -1,8 +1,8 @@
-"""Tests for terminal_utils module."""
+"""Tests for terminal module."""
 
 import pytest
 
-from mini_agent.utils import (
+from mini_agent.terminal import (
     calculate_display_width,
     pad_to_width,
     truncate_with_ellipsis,

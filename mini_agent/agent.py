@@ -12,7 +12,7 @@ from .llm import LLMClient
 from .logger import AgentLogger
 from .schema import Message
 from .tools import Tool, ToolResult
-from .utils import calculate_display_width
+from .terminal import calculate_display_width
 from .core.events import AgentCompletedEvent
 
 
