@@ -6,7 +6,7 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
-from ..logger import RetryConfig, async_retry
+from ..logger import RetryConfig
 from ..schema import FunctionCall, LLMResponse, Message, TokenUsage, ToolCall
 from .base import LLMClientBase
 
@@ -257,39 +257,3 @@ class OpenAIClient(LLMClientBase):
             finish_reason="stop",  # OpenAI doesn't provide finish_reason in the message
             usage=usage,
         )
-
-    async def generate(
-        self,
-        messages: list[Message],
-        tools: list[Any] | None = None,
-    ) -> LLMResponse:
-        """Generate response from OpenAI LLM.
-
-        Args:
-            messages: List of conversation messages
-            tools: Optional list of available tools
-
-        Returns:
-            LLMResponse containing the generated content
-        """
-        # Prepare request
-        request_params = self._prepare_request(messages, tools)
-
-        # Make API request with retry logic
-        if self.retry_config.enabled:
-            # Apply retry logic
-            retry_decorator = async_retry(config=self.retry_config, on_retry=self.retry_callback)
-            api_call = retry_decorator(self._make_api_request)
-            response = await api_call(
-                request_params["api_messages"],
-                request_params["tools"],
-            )
-        else:
-            # Don't use retry
-            response = await self._make_api_request(
-                request_params["api_messages"],
-                request_params["tools"],
-            )
-
-        # Parse and return response
-        return self._parse_response(response)
