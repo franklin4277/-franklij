@@ -189,8 +189,6 @@ sequenceDiagram
     activate T
     T->>SA: run(question, focus)
     activate SA
-    SA->>PE: stream(sub_agent, question, focus)
-    activate PE
     PE-->>W: ⭐ AgentStartedEvent(<br/>  source="data_analysis_report",<br/>  task=question)
 
     Note over PE,SL: === 阶段 1: Clarify (可选) ===
@@ -369,8 +367,7 @@ T+43s     AgentCompletedEvent        (final_result=总结)
 
 | 流程 | 涉及文件 |
 |------|---------|
-| 问数 | `mini_agent/core/agent.py`<br>`mini_agent/core/orchestrator.py`<br>`mini_agent/skills/data_query/skill.py`<br>`mini_agent/skills/data_query/agent.py`<br>`mini_agent/skills/data_query/connector.py`<br>`mini_agent/skills/data_query/render.py` |
-| 数据分析报告 | `mini_agent/core/sub_agent.py`<br>`mini_agent/skills/data_analysis_report/sub_agent.py`<br>`mini_agent/skills/data_analysis_report/orchestrator.py`（PlanExecute）<br>`mini_agent/core/report.py`（ReportTemplate + Citation） |
+| 问数 | `mini_agent/agent.py`<br>`mini_agent/core/orchestrator.py`<br>`skills/data_query/SKILL.md`<br>`skills/data_query/scripts/ask.py`<br>`mini_agent/connectors/sqlbot.py`<br>`mini_agent/render.py`<br>`mini_agent/memory/session.py` |
 
 ---
 

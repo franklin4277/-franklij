@@ -239,21 +239,36 @@ mini-agent/
 │   ├── cli.py                  # 主 CLI
 │   ├── agent.py                # Agent 类（支持 plugins=）
 │   ├── config.py
-│   ├── llm/
-│   ├── tools/                  # ⭐ Tool 库（自动扫描）
-│   │   ├── base.py             # Tool 基类（含 bind_resources 钩子）
-│   │   ├── bash_tool.py
-│   │   ├── file_tools.py
-│   │   ├── note_tool.py
-│   │   ├── mcp_loader.py       # MCP 客户端
-│   │   └── skill_tool.py
+│   ├── schema.py / schema/     # 数据模型（LLMResponse、Message 等）
+│   ├── logger.py               # 日志与重试
+│   ├── render.py               # Markdown 渲染
+│   ├── terminal.py             # 终端显示工具
+│   ├── llm/                    # LLM 客户端层
+│   │   ├── base.py             # 抽象基类
+│   │   ├── anthropic_client.py # Anthropic 协议
+│   │   ├── openai_client.py    # OpenAI 协议
+│   │   └── llm_wrapper.py      # 统一 LLMClient
+│   ├── tools/                  # ⭐ Tool 库
+│   │   ├── base.py / bash_tool.py / ...  # 向后兼容 shim
+│   │   ├── builtin/            # 内置工具实现
+│   │   │   ├── base.py         # Tool 基类 + ToolResult
+│   │   │   ├── bash_tool.py    # Shell 命令执行
+│   │   │   ├── file_tools.py   # 文件读写编辑
+│   │   │   └── note_tool.py    # 会话笔记
+│   │   └── loaders/            # 外部工具加载器
+│   │       └── mcp_loader.py   # MCP 协议客户端
 │   ├── core/                   # ⭐ 核心抽象
-│   │   ├── plugins.py          # Plugins 注册表
-│   │   └── skill.py            # Skill + SkillManager
-│   ├── data_agent/             # SQLBot Connector（被 data_query Skill 使用）
-│   │   └── sqlbot.py
-│   ├── api/                    # FastAPI
-│   └── ...
+│   │   ├── plugins.py          # Plugins 统一注册表
+│   │   ├── skill.py            # Skill + SkillManager
+│   │   ├── orchestrator.py     # ReAct 编排器
+│   │   ├── events.py           # 流式事件类型
+│   │   ├── sub_agent.py        # 子代理抽象
+│   ├── connectors/             # 外部服务连接器
+│   │   └── sqlbot.py           # SQLBot HTTP 客户端
+│   ├── memory/                 # 会话持久化
+│   │   └── session.py          # SessionStore
+│   ├── api/                    # FastAPI 服务器
+│   ├── acp/                    # ACP 集成（Zed 编辑器）
 │
 ├── skills/                     # ⭐ 用户项目级 Skills
 │   └── data_query/             # 当前唯一一个自定义 Skill
