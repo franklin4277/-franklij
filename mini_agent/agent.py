@@ -123,21 +123,7 @@ class Agent:
         """
         function_name = tool_call.function.name
         arguments = tool_call.function.arguments or {}
-        if function_name not in self.tools:
-            return ToolResult(
-                success=False,
-                content="",
-                error=f"Unknown tool: {function_name}",
-            )
-        try:
-            tool = self.tools[function_name]
-            result = await tool.execute(**arguments)
-            return result
-        except Exception as e:
-            import traceback
-            error_detail = f"{type(e).__name__}: {str(e)}"
-            traceback.print_exc()
-            return ToolResult(success=False, content="", error=error_detail)
+        return await self._execute_one_tool(function_name, arguments)
 
     async def stream(self, message: str, **opts):
         """Stream AgentEvents via Orchestrator (new API).
@@ -483,12 +469,7 @@ Requirements:
             print(f"   {Colors.DIM}{line}{Colors.RESET}")
 
     async def _execute_one_tool(self, function_name: str, arguments: dict) -> ToolResult:
-        """Run a single tool call, converting any failure into a failed ToolResult.
-
-        Note: this deliberately keeps run()'s own error formatting (which feeds the
-        traceback back to the LLM) rather than delegating to execute_tool(), whose
-        error text differs. See the Agent docs before unifying the two.
-        """
+        """Run a single tool call, converting any failure into a failed ToolResult."""
         if function_name not in self.tools:
             return ToolResult(
                 success=False,
