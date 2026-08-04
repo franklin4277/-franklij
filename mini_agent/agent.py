@@ -388,6 +388,132 @@ Requirements:
             # Use simple text summary on failure
             return summary_content
 
+    # ---- run() helpers -------------------------------------------------------
+    def _emit_step_header(self, step: int) -> None:
+        """Print the box-drawing header announcing the current step."""
+        BOX_WIDTH = 58
+        step_text = f"{Colors.BOLD}{Colors.BRIGHT_CYAN}💭 Step {step + 1}/{self.max_steps}{Colors.RESET}"
+        step_display_width = calculate_display_width(step_text)
+        padding = max(0, BOX_WIDTH - 1 - step_display_width)  # -1 for leading space
+
+        print(f"\n{Colors.DIM}╭{'─' * BOX_WIDTH}╮{Colors.RESET}")
+        print(f"{Colors.DIM}│{Colors.RESET} {step_text}{' ' * padding}{Colors.DIM}│{Colors.RESET}")
+        print(f"{Colors.DIM}╰{'─' * BOX_WIDTH}╯{Colors.RESET}")
+
+    def _emit_step_footer(self, step: int, step_start_time: float, run_start_time: float) -> None:
+        """Print the elapsed-time line closing out the current step."""
+        step_elapsed = perf_counter() - step_start_time
+        total_elapsed = perf_counter() - run_start_time
+        print(f"\n{Colors.DIM}⏱️  Step {step + 1} completed in {step_elapsed:.2f}s (total: {total_elapsed:.2f}s){Colors.RESET}")
+
+    def _cancel_and_cleanup(self) -> str:
+        """Drop the incomplete step, announce cancellation, return the message."""
+        self._cleanup_incomplete_messages()
+        cancel_msg = "Task cancelled by user."
+        print(f"\n{Colors.BRIGHT_YELLOW}⚠️  {cancel_msg}{Colors.RESET}")
+        return cancel_msg
+
+    def _format_llm_error(self, e: Exception) -> str:
+        """Announce a failed LLM call and return the message run() should yield."""
+        # Check if it's a retry exhausted error
+        from .logger import RetryExhaustedError
+
+        if isinstance(e, RetryExhaustedError):
+            error_msg = f"LLM call failed after {e.attempts} retries\nLast error: {str(e.last_exception)}"
+            print(f"\n{Colors.BRIGHT_RED}❌ Retry failed:{Colors.RESET} {error_msg}")
+        else:
+            error_msg = f"LLM call failed: {str(e)}"
+            print(f"\n{Colors.BRIGHT_RED}❌ Error:{Colors.RESET} {error_msg}")
+        return error_msg
+
+    def _record_llm_response(self, response) -> None:
+        """Accumulate token usage, log the response, append the assistant message."""
+        # Accumulate API reported token usage
+        if response.usage:
+            self.api_total_tokens = response.usage.total_tokens
+
+        self.logger.log_response(
+            content=response.content,
+            thinking=response.thinking,
+            tool_calls=response.tool_calls,
+            finish_reason=response.finish_reason,
+        )
+
+        self.messages.append(
+            Message(
+                role="assistant",
+                content=response.content,
+                thinking=response.thinking,
+                tool_calls=response.tool_calls,
+            )
+        )
+
+    def _emit_assistant_output(self, response) -> None:
+        """Print the assistant's thinking and reply, when present."""
+        if response.thinking:
+            print(f"\n{Colors.BOLD}{Colors.MAGENTA}🧠 Thinking:{Colors.RESET}")
+            print(f"{Colors.DIM}{response.thinking}{Colors.RESET}")
+
+        if response.content:
+            print(f"\n{Colors.BOLD}{Colors.BRIGHT_BLUE}🤖 Assistant:{Colors.RESET}")
+            print(f"{response.content}")
+
+    def _emit_tool_call(self, function_name: str, arguments: dict) -> None:
+        """Print the tool name and its arguments, truncating long values."""
+        print(f"\n{Colors.BRIGHT_YELLOW}🔧 Tool Call:{Colors.RESET} {Colors.BOLD}{Colors.CYAN}{function_name}{Colors.RESET}")
+
+        # Arguments (formatted display)
+        print(f"{Colors.DIM}   Arguments:{Colors.RESET}")
+        # Truncate each argument value to avoid overly long output
+        truncated_args = {}
+        for key, value in arguments.items():
+            value_str = str(value)
+            if len(value_str) > 200:
+                truncated_args[key] = value_str[:200] + "..."
+            else:
+                truncated_args[key] = value
+        args_json = json.dumps(truncated_args, indent=2, ensure_ascii=False)
+        for line in args_json.split("\n"):
+            print(f"   {Colors.DIM}{line}{Colors.RESET}")
+
+    async def _execute_one_tool(self, function_name: str, arguments: dict) -> ToolResult:
+        """Run a single tool call, converting any failure into a failed ToolResult.
+
+        Note: this deliberately keeps run()'s own error formatting (which feeds the
+        traceback back to the LLM) rather than delegating to execute_tool(), whose
+        error text differs. See the Agent docs before unifying the two.
+        """
+        if function_name not in self.tools:
+            return ToolResult(
+                success=False,
+                content="",
+                error=f"Unknown tool: {function_name}",
+            )
+        try:
+            tool = self.tools[function_name]
+            return await tool.execute(**arguments)
+        except Exception as e:
+            # Catch all exceptions during tool execution, convert to failed ToolResult
+            import traceback
+
+            error_detail = f"{type(e).__name__}: {str(e)}"
+            error_trace = traceback.format_exc()
+            return ToolResult(
+                success=False,
+                content="",
+                error=f"Tool execution failed: {error_detail}\n\nTraceback:\n{error_trace}",
+            )
+
+    def _emit_tool_result(self, result: ToolResult) -> None:
+        """Print a preview of the tool result, or the error if it failed."""
+        if result.success:
+            result_text = result.content
+            if len(result_text) > 300:
+                result_text = result_text[:300] + f"{Colors.DIM}...{Colors.RESET}"
+            print(f"{Colors.BRIGHT_GREEN}✓ Result:{Colors.RESET} {result_text}")
+        else:
+            print(f"{Colors.BRIGHT_RED}✗ Error:{Colors.RESET} {Colors.RED}{result.error}{Colors.RESET}")
+
     async def run(self, cancel_event: Optional[asyncio.Event] = None) -> str:
         """Execute agent loop until task is complete or max steps reached.
 
@@ -413,24 +539,13 @@ Requirements:
         while step < self.max_steps:
             # Check for cancellation at start of each step
             if self._check_cancelled():
-                self._cleanup_incomplete_messages()
-                cancel_msg = "Task cancelled by user."
-                print(f"\n{Colors.BRIGHT_YELLOW}⚠️  {cancel_msg}{Colors.RESET}")
-                return cancel_msg
+                return self._cancel_and_cleanup()
 
             step_start_time = perf_counter()
             # Check and summarize message history to prevent context overflow
             await self._summarize_messages()
 
-            # Step header with proper width calculation
-            BOX_WIDTH = 58
-            step_text = f"{Colors.BOLD}{Colors.BRIGHT_CYAN}💭 Step {step + 1}/{self.max_steps}{Colors.RESET}"
-            step_display_width = calculate_display_width(step_text)
-            padding = max(0, BOX_WIDTH - 1 - step_display_width)  # -1 for leading space
-
-            print(f"\n{Colors.DIM}╭{'─' * BOX_WIDTH}╮{Colors.RESET}")
-            print(f"{Colors.DIM}│{Colors.RESET} {step_text}{' ' * padding}{Colors.DIM}│{Colors.RESET}")
-            print(f"{Colors.DIM}╰{'─' * BOX_WIDTH}╯{Colors.RESET}")
+            self._emit_step_header(step)
 
             # Get tool list for LLM call
             tool_list = list(self.tools.values())
@@ -441,61 +556,19 @@ Requirements:
             try:
                 response = await self.llm.generate(messages=self.messages, tools=tool_list)
             except Exception as e:
-                # Check if it's a retry exhausted error
-                from .logger import RetryExhaustedError
+                return self._format_llm_error(e)
 
-                if isinstance(e, RetryExhaustedError):
-                    error_msg = f"LLM call failed after {e.attempts} retries\nLast error: {str(e.last_exception)}"
-                    print(f"\n{Colors.BRIGHT_RED}❌ Retry failed:{Colors.RESET} {error_msg}")
-                else:
-                    error_msg = f"LLM call failed: {str(e)}"
-                    print(f"\n{Colors.BRIGHT_RED}❌ Error:{Colors.RESET} {error_msg}")
-                return error_msg
-
-            # Accumulate API reported token usage
-            if response.usage:
-                self.api_total_tokens = response.usage.total_tokens
-
-            # Log LLM response
-            self.logger.log_response(
-                content=response.content,
-                thinking=response.thinking,
-                tool_calls=response.tool_calls,
-                finish_reason=response.finish_reason,
-            )
-
-            # Add assistant message
-            assistant_msg = Message(
-                role="assistant",
-                content=response.content,
-                thinking=response.thinking,
-                tool_calls=response.tool_calls,
-            )
-            self.messages.append(assistant_msg)
-
-            # Print thinking if present
-            if response.thinking:
-                print(f"\n{Colors.BOLD}{Colors.MAGENTA}🧠 Thinking:{Colors.RESET}")
-                print(f"{Colors.DIM}{response.thinking}{Colors.RESET}")
-
-            # Print assistant response
-            if response.content:
-                print(f"\n{Colors.BOLD}{Colors.BRIGHT_BLUE}🤖 Assistant:{Colors.RESET}")
-                print(f"{response.content}")
+            self._record_llm_response(response)
+            self._emit_assistant_output(response)
 
             # Check if task is complete (no tool calls)
             if not response.tool_calls:
-                step_elapsed = perf_counter() - step_start_time
-                total_elapsed = perf_counter() - run_start_time
-                print(f"\n{Colors.DIM}⏱️  Step {step + 1} completed in {step_elapsed:.2f}s (total: {total_elapsed:.2f}s){Colors.RESET}")
+                self._emit_step_footer(step, step_start_time, run_start_time)
                 return response.content
 
             # Check for cancellation before executing tools
             if self._check_cancelled():
-                self._cleanup_incomplete_messages()
-                cancel_msg = "Task cancelled by user."
-                print(f"\n{Colors.BRIGHT_YELLOW}⚠️  {cancel_msg}{Colors.RESET}")
-                return cancel_msg
+                return self._cancel_and_cleanup()
 
             # Execute tool calls
             for tool_call in response.tool_calls:
@@ -503,45 +576,9 @@ Requirements:
                 function_name = tool_call.function.name
                 arguments = tool_call.function.arguments
 
-                # Tool call header
-                print(f"\n{Colors.BRIGHT_YELLOW}🔧 Tool Call:{Colors.RESET} {Colors.BOLD}{Colors.CYAN}{function_name}{Colors.RESET}")
+                self._emit_tool_call(function_name, arguments)
 
-                # Arguments (formatted display)
-                print(f"{Colors.DIM}   Arguments:{Colors.RESET}")
-                # Truncate each argument value to avoid overly long output
-                truncated_args = {}
-                for key, value in arguments.items():
-                    value_str = str(value)
-                    if len(value_str) > 200:
-                        truncated_args[key] = value_str[:200] + "..."
-                    else:
-                        truncated_args[key] = value
-                args_json = json.dumps(truncated_args, indent=2, ensure_ascii=False)
-                for line in args_json.split("\n"):
-                    print(f"   {Colors.DIM}{line}{Colors.RESET}")
-
-                # Execute tool
-                if function_name not in self.tools:
-                    result = ToolResult(
-                        success=False,
-                        content="",
-                        error=f"Unknown tool: {function_name}",
-                    )
-                else:
-                    try:
-                        tool = self.tools[function_name]
-                        result = await tool.execute(**arguments)
-                    except Exception as e:
-                        # Catch all exceptions during tool execution, convert to failed ToolResult
-                        import traceback
-
-                        error_detail = f"{type(e).__name__}: {str(e)}"
-                        error_trace = traceback.format_exc()
-                        result = ToolResult(
-                            success=False,
-                            content="",
-                            error=f"Tool execution failed: {error_detail}\n\nTraceback:\n{error_trace}",
-                        )
+                result = await self._execute_one_tool(function_name, arguments)
 
                 # Log tool execution result
                 self.logger.log_tool_result(
@@ -552,14 +589,7 @@ Requirements:
                     result_error=result.error if not result.success else None,
                 )
 
-                # Print result
-                if result.success:
-                    result_text = result.content
-                    if len(result_text) > 300:
-                        result_text = result_text[:300] + f"{Colors.DIM}...{Colors.RESET}"
-                    print(f"{Colors.BRIGHT_GREEN}✓ Result:{Colors.RESET} {result_text}")
-                else:
-                    print(f"{Colors.BRIGHT_RED}✗ Error:{Colors.RESET} {Colors.RED}{result.error}{Colors.RESET}")
+                self._emit_tool_result(result)
 
                 # Add tool result message
                 tool_msg = Message(
@@ -572,14 +602,9 @@ Requirements:
 
                 # Check for cancellation after each tool execution
                 if self._check_cancelled():
-                    self._cleanup_incomplete_messages()
-                    cancel_msg = "Task cancelled by user."
-                    print(f"\n{Colors.BRIGHT_YELLOW}⚠️  {cancel_msg}{Colors.RESET}")
-                    return cancel_msg
+                    return self._cancel_and_cleanup()
 
-            step_elapsed = perf_counter() - step_start_time
-            total_elapsed = perf_counter() - run_start_time
-            print(f"\n{Colors.DIM}⏱️  Step {step + 1} completed in {step_elapsed:.2f}s (total: {total_elapsed:.2f}s){Colors.RESET}")
+            self._emit_step_footer(step, step_start_time, run_start_time)
 
             step += 1
 
