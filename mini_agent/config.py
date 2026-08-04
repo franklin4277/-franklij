@@ -31,6 +31,8 @@ class AgentConfig(BaseModel):
     max_steps: int = 50
     workspace_dir: str = "./workspace"
     system_prompt_path: str = "system_prompt.md"
+    token_limit: int = 80000  # Summary triggered when tokens exceed this value
+    box_width: int = 58      # Terminal box display width
 
 
 class MCPConfig(BaseModel):
@@ -129,6 +131,8 @@ class Config(BaseModel):
             max_steps=data.get("max_steps", 50),
             workspace_dir=data.get("workspace_dir", "./workspace"),
             system_prompt_path=data.get("system_prompt_path", "system_prompt.md"),
+            token_limit=data.get("token_limit", 80000),
+            box_width=data.get("box_width", 58),
         )
 
         # Parse tools configuration

@@ -37,6 +37,8 @@ retry:
 max_steps: 100  # Maximum execution steps
 workspace_dir: "./workspace"  # Working directory
 system_prompt_path: "system_prompt.md"  # System prompt file (same config directory)
+# token_limit: 80000     # Token threshold for context summarization
+# box_width: 58          # Terminal box width for step display
 
 # ===== Tools Configuration =====
 tools:
