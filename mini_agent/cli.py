@@ -18,7 +18,7 @@ import sys
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Tuple
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
@@ -447,6 +447,308 @@ async def _quiet_cleanup():
         pass
 
 
+def _build_llm_client(config: Config) -> LLMClient:
+    """Build the LLM client from config, including retry wiring.
+
+    The retry config is already the dataclass RetryConfig from logger.py
+    (the same type LLMClient consumes), so we pass it through directly.
+
+    Returns:
+        Configured LLMClient instance with retry callback attached.
+    """
+    retry_config = config.llm.retry
+
+    def on_retry(exception: Exception, attempt: int):
+        """Retry callback function to display retry information"""
+        print(f"\n{Colors.BRIGHT_YELLOW}⚠️  LLM call failed (attempt {attempt}): {str(exception)}{Colors.RESET}")
+        next_delay = retry_config.calculate_delay(attempt - 1)
+        print(f"{Colors.DIM}   Retrying in {next_delay:.1f}s (attempt {attempt + 1})...{Colors.RESET}")
+
+    # Convert provider string to LLMProvider enum
+    provider = LLMProvider.ANTHROPIC if config.llm.provider.lower() == "anthropic" else LLMProvider.OPENAI
+
+    llm_client = LLMClient(
+        api_key=config.llm.api_key,
+        provider=provider,
+        api_base=config.llm.api_base,
+        model=config.llm.model,
+        retry_config=retry_config if retry_config.enabled else None,
+    )
+
+    # Set retry callback
+    if retry_config.enabled:
+        llm_client.retry_callback = on_retry
+        print(f"{Colors.GREEN}✅ LLM retry mechanism enabled (max {retry_config.max_retries} retries){Colors.RESET}")
+
+    return llm_client
+
+
+def _load_system_prompt(config: Config) -> str:
+    """Load the system prompt via priority search, with a default fallback.
+
+    Returns:
+        System prompt string (either loaded from disk or the built-in default).
+    """
+    system_prompt_path = Config.find_config_file(config.agent.system_prompt_path)
+    if system_prompt_path and system_prompt_path.exists():
+        system_prompt = system_prompt_path.read_text(encoding="utf-8")
+        print(f"{Colors.GREEN}✅ Loaded system prompt (from: {system_prompt_path}){Colors.RESET}")
+    else:
+        system_prompt = "You are Mini-Agent, an intelligent assistant powered by MiniMax M2.5 that can help users complete various tasks."
+        print(f"{Colors.YELLOW}⚠️  System prompt not found, using default{Colors.RESET}")
+    return system_prompt
+
+
+async def _build_agent(config: Config, workspace_dir: Path) -> Agent:
+    """Build the Agent: LLM client, tools, plugins, system prompt.
+
+    Composes the LLM client construction, base/workspace tool loading,
+    and system prompt loading into a single callable.
+
+    Args:
+        config: Loaded Config object.
+        workspace_dir: Workspace directory path.
+
+    Returns:
+        Fully configured Agent instance ready to run.
+    """
+    # 1. Initialize LLM client
+    llm_client = _build_llm_client(config)
+
+    # 2. Initialize base tools (independent of workspace)
+    tools, plugins = await initialize_base_tools(config)
+
+    # 3. Add workspace-dependent tools
+    add_workspace_tools(tools, config, workspace_dir)
+
+    # 4. Load system prompt
+    system_prompt = _load_system_prompt(config)
+
+    # 5. Skills metadata is injected by Agent.__init__ via the plugins arg,
+    #    which replaces {SKILLS_METADATA} in the system prompt automatically.
+
+    # 6. Create Agent
+    agent = Agent(
+        llm_client=llm_client,
+        system_prompt=system_prompt,
+        tools=tools,
+        max_steps=config.agent.max_steps,
+        workspace_dir=str(workspace_dir),
+        plugins=plugins,
+    )
+    return agent
+
+
+def _setup_prompt_session() -> PromptSession:
+    """Create the prompt_toolkit session with history, completer, keybindings, style.
+
+    Returns:
+        Configured PromptSession instance.
+    """
+    # Command completer
+    command_completer = WordCompleter(
+        ["/help", "/clear", "/history", "/stats", "/log", "/exit", "/quit", "/q"],
+        ignore_case=True,
+        sentence=True,
+    )
+
+    # Custom style for prompt
+    prompt_style = Style.from_dict(
+        {
+            "prompt": "#00ff00 bold",  # Green and bold
+            "separator": "#666666",  # Gray
+        }
+    )
+
+    # Custom key bindings
+    kb = KeyBindings()
+
+    @kb.add("c-u")  # Ctrl+U: Clear current line
+    def _(event):
+        """Clear the current input line"""
+        event.current_buffer.reset()
+
+    @kb.add("c-l")  # Ctrl+L: Clear screen (optional bonus)
+    def _(event):
+        """Clear the screen"""
+        event.app.renderer.clear()
+
+    @kb.add("c-j")  # Ctrl+J (对应 Ctrl+Enter)
+    def _(event):
+        """Insert a newline"""
+        event.current_buffer.insert_text("\n")
+
+    # Create prompt session with history and auto-suggest
+    # Use FileHistory for persistent history across sessions (stored in user's home directory)
+    history_file = Path.home() / ".mini-agent" / ".history"
+    history_file.parent.mkdir(parents=True, exist_ok=True)
+    session = PromptSession(
+        history=FileHistory(str(history_file)),
+        auto_suggest=AutoSuggestFromHistory(),
+        completer=command_completer,
+        style=prompt_style,
+        key_bindings=kb,
+    )
+    return session
+
+
+def _esc_key_listener(cancel_event: asyncio.Event, cancelled_flag: list, stop_event: threading.Event) -> None:
+    """Listen for the Esc key on a background thread and signal cancellation.
+
+    Cross-platform: Windows uses msvcrt; Unix/macOS uses termios/tty/select.
+
+    Args:
+        cancel_event: asyncio.Event to set when Esc is pressed.
+        cancelled_flag: Single-element list used as a mutable bool shared with the
+            caller (which polls it in the async loop).
+        stop_event: threading.Event used to break out of the listener loop on cleanup.
+    """
+    if platform.system() == "Windows":
+        try:
+            import msvcrt
+
+            while not stop_event.is_set():
+                if msvcrt.kbhit():
+                    char = msvcrt.getch()
+                    if char == b"\x1b":  # Esc
+                        print(f"\n{Colors.BRIGHT_YELLOW}⏹️  Esc pressed, cancelling...{Colors.RESET}")
+                        cancelled_flag[0] = True
+                        cancel_event.set()
+                        break
+                stop_event.wait(0.05)
+        except Exception:
+            pass
+        return
+
+    # Unix/macOS
+    try:
+        import select
+        import termios
+        import tty
+
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+
+        try:
+            tty.setcbreak(fd)
+            while not stop_event.is_set():
+                rlist, _, _ = select.select([sys.stdin], [], [], 0.05)
+                if rlist:
+                    char = sys.stdin.read(1)
+                    if char == "\x1b":  # Esc
+                        print(f"\n{Colors.BRIGHT_YELLOW}⏹️  Esc pressed, cancelling...{Colors.RESET}")
+                        cancelled_flag[0] = True
+                        cancel_event.set()
+                        break
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    except Exception:
+        pass
+
+
+def _handle_command(user_input: str, agent: Agent, session_start: datetime) -> Optional[bool]:
+    """Dispatch a slash command. Returns True if the loop should exit.
+
+    Args:
+        user_input: Raw user input (assumed to start with "/").
+        agent: The Agent instance.
+        session_start: Session start datetime (for /stats).
+
+    Returns:
+        True if the command was an exit command (caller breaks the loop);
+        False if the command was handled but the loop should continue;
+        None if the command was not recognized (caller shows "unknown command").
+    """
+    command = user_input.lower()
+
+    if command in ["/exit", "/quit", "/q"]:
+        print(f"\n{Colors.BRIGHT_YELLOW}👋 Goodbye! Thanks for using Mini Agent{Colors.RESET}\n")
+        print_stats(agent, session_start)
+        return True
+
+    if command == "/help":
+        print_help()
+        return False
+
+    if command == "/clear":
+        # Clear message history but keep system prompt
+        old_count = len(agent.messages)
+        agent.messages = [agent.messages[0]]  # Keep only system message
+        print(f"{Colors.GREEN}✅ Cleared {old_count - 1} messages, starting new session{Colors.RESET}\n")
+        return False
+
+    if command == "/history":
+        print(f"\n{Colors.BRIGHT_CYAN}Current session message count: {len(agent.messages)}{Colors.RESET}\n")
+        return False
+
+    if command == "/stats":
+        print_stats(agent, session_start)
+        return False
+
+    if command == "/log" or command.startswith("/log "):
+        # Parse /log command
+        parts = user_input.split(maxsplit=1)
+        if len(parts) == 1:
+            # /log - show log directory
+            show_log_directory(open_file_manager=True)
+        else:
+            # /log <filename> - read specific log file
+            filename = parts[1].strip("\"'")
+            read_log_file(filename)
+        return False
+
+    return None
+
+
+async def _run_agent_turn(
+    agent: Agent,
+    user_input: str,
+) -> None:
+    """Run a single agent turn with Esc-cancellation support.
+
+    Sets up the Esc listener thread, runs the agent, and tears it down.
+
+    Args:
+        agent: Agent instance to run.
+        user_input: User message to send to the agent.
+    """
+    # Create cancellation event
+    cancel_event = asyncio.Event()
+    agent.cancel_event = cancel_event
+
+    # Esc key listener thread
+    esc_listener_stop = threading.Event()
+    esc_cancelled = [False]  # Mutable container for thread access
+
+    # Start Esc listener thread
+    esc_thread = threading.Thread(
+        target=_esc_key_listener,
+        args=(cancel_event, esc_cancelled, esc_listener_stop),
+        daemon=True,
+    )
+    esc_thread.start()
+
+    # Run agent with periodic cancellation check
+    try:
+        agent_task = asyncio.create_task(agent.run())
+
+        # Poll for cancellation while agent runs
+        while not agent_task.done():
+            if esc_cancelled[0]:
+                cancel_event.set()
+            await asyncio.sleep(0.1)
+
+        # Get result
+        _ = agent_task.result()
+
+    except asyncio.CancelledError:
+        print(f"\n{Colors.BRIGHT_YELLOW}⚠️  Agent execution cancelled{Colors.RESET}")
+    finally:
+        agent.cancel_event = None
+        esc_listener_stop.set()
+        esc_thread.join(timeout=0.2)
+
+
 async def run_agent(workspace_dir: Path, task: str = None):
     """Run Agent in interactive or non-interactive mode.
 
@@ -499,68 +801,15 @@ async def run_agent(workspace_dir: Path, task: str = None):
         print(f"{Colors.RED}❌ Error: Failed to load configuration file: {e}{Colors.RESET}")
         return
 
-    # 2. Initialize LLM client
-    # config.llm.retry is already the dataclass RetryConfig from logger.py
-    # (the same type LLMClient consumes), so we can pass it through directly.
-    retry_config = config.llm.retry
+    # 2. Build Agent (LLM + tools + plugins + system prompt)
+    agent = await _build_agent(config, workspace_dir)
 
-    # Create retry callback function to display retry information in terminal
-    def on_retry(exception: Exception, attempt: int):
-        """Retry callback function to display retry information"""
-        print(f"\n{Colors.BRIGHT_YELLOW}⚠️  LLM call failed (attempt {attempt}): {str(exception)}{Colors.RESET}")
-        next_delay = retry_config.calculate_delay(attempt - 1)
-        print(f"{Colors.DIM}   Retrying in {next_delay:.1f}s (attempt {attempt + 1})...{Colors.RESET}")
-
-    # Convert provider string to LLMProvider enum
-    provider = LLMProvider.ANTHROPIC if config.llm.provider.lower() == "anthropic" else LLMProvider.OPENAI
-
-    llm_client = LLMClient(
-        api_key=config.llm.api_key,
-        provider=provider,
-        api_base=config.llm.api_base,
-        model=config.llm.model,
-        retry_config=retry_config if retry_config.enabled else None,
-    )
-
-    # Set retry callback
-    if retry_config.enabled:
-        llm_client.retry_callback = on_retry
-        print(f"{Colors.GREEN}✅ LLM retry mechanism enabled (max {retry_config.max_retries} retries){Colors.RESET}")
-
-    # 3. Initialize base tools (independent of workspace)
-    tools, plugins = await initialize_base_tools(config)
-
-    # 4. Add workspace-dependent tools
-    add_workspace_tools(tools, config, workspace_dir)
-
-    # 5. Load System Prompt (with priority search)
-    system_prompt_path = Config.find_config_file(config.agent.system_prompt_path)
-    if system_prompt_path and system_prompt_path.exists():
-        system_prompt = system_prompt_path.read_text(encoding="utf-8")
-        print(f"{Colors.GREEN}✅ Loaded system prompt (from: {system_prompt_path}){Colors.RESET}")
-    else:
-        system_prompt = "You are Mini-Agent, an intelligent assistant powered by MiniMax M2.5 that can help users complete various tasks."
-        print(f"{Colors.YELLOW}⚠️  System prompt not found, using default{Colors.RESET}")
-
-    # 6. Skills metadata is injected by Agent.__init__ via the plugins arg,
-    #    which replaces {SKILLS_METADATA} in the system prompt automatically.
-
-    # 7. Create Agent
-    agent = Agent(
-        llm_client=llm_client,
-        system_prompt=system_prompt,
-        tools=tools,
-        max_steps=config.agent.max_steps,
-        workspace_dir=str(workspace_dir),
-        plugins=plugins,
-    )
-
-    # 8. Display welcome information
+    # 3. Display welcome information
     if not task:
         print_banner()
         print_session_info(agent, workspace_dir, config.llm.model)
 
-    # 8.5 Non-interactive mode: execute task and exit
+    # 4. Non-interactive mode: execute task and exit
     if task:
         print(f"\n{Colors.BRIGHT_BLUE}Agent{Colors.RESET} {Colors.DIM}›{Colors.RESET} {Colors.DIM}Executing task...{Colors.RESET}\n")
         agent.add_user_message(task)
@@ -575,53 +824,10 @@ async def run_agent(workspace_dir: Path, task: str = None):
         await _quiet_cleanup()
         return
 
-    # 9. Setup prompt_toolkit session
-    # Command completer
-    command_completer = WordCompleter(
-        ["/help", "/clear", "/history", "/stats", "/log", "/exit", "/quit", "/q"],
-        ignore_case=True,
-        sentence=True,
-    )
+    # 5. Setup prompt_toolkit session
+    session = _setup_prompt_session()
 
-    # Custom style for prompt
-    prompt_style = Style.from_dict(
-        {
-            "prompt": "#00ff00 bold",  # Green and bold
-            "separator": "#666666",  # Gray
-        }
-    )
-
-    # Custom key bindings
-    kb = KeyBindings()
-
-    @kb.add("c-u")  # Ctrl+U: Clear current line
-    def _(event):
-        """Clear the current input line"""
-        event.current_buffer.reset()
-
-    @kb.add("c-l")  # Ctrl+L: Clear screen (optional bonus)
-    def _(event):
-        """Clear the screen"""
-        event.app.renderer.clear()
-
-    @kb.add("c-j")  # Ctrl+J (对应 Ctrl+Enter)
-    def _(event):
-        """Insert a newline"""
-        event.current_buffer.insert_text("\n")
-
-    # Create prompt session with history and auto-suggest
-    # Use FileHistory for persistent history across sessions (stored in user's home directory)
-    history_file = Path.home() / ".mini-agent" / ".history"
-    history_file.parent.mkdir(parents=True, exist_ok=True)
-    session = PromptSession(
-        history=FileHistory(str(history_file)),
-        auto_suggest=AutoSuggestFromHistory(),
-        completer=command_completer,
-        style=prompt_style,
-        key_bindings=kb,
-    )
-
-    # 10. Interactive loop
+    # 6. Interactive loop
     while True:
         try:
             # Get user input using prompt_toolkit
@@ -638,50 +844,15 @@ async def run_agent(workspace_dir: Path, task: str = None):
             if not user_input:
                 continue
 
-            # Handle commands
+            # Handle slash commands
             if user_input.startswith("/"):
-                command = user_input.lower()
-
-                if command in ["/exit", "/quit", "/q"]:
-                    print(f"\n{Colors.BRIGHT_YELLOW}👋 Goodbye! Thanks for using Mini Agent{Colors.RESET}\n")
-                    print_stats(agent, session_start)
+                result = _handle_command(user_input, agent, session_start)
+                if result is True:
                     break
-
-                elif command == "/help":
-                    print_help()
-                    continue
-
-                elif command == "/clear":
-                    # Clear message history but keep system prompt
-                    old_count = len(agent.messages)
-                    agent.messages = [agent.messages[0]]  # Keep only system message
-                    print(f"{Colors.GREEN}✅ Cleared {old_count - 1} messages, starting new session{Colors.RESET}\n")
-                    continue
-
-                elif command == "/history":
-                    print(f"\n{Colors.BRIGHT_CYAN}Current session message count: {len(agent.messages)}{Colors.RESET}\n")
-                    continue
-
-                elif command == "/stats":
-                    print_stats(agent, session_start)
-                    continue
-
-                elif command == "/log" or command.startswith("/log "):
-                    # Parse /log command
-                    parts = user_input.split(maxsplit=1)
-                    if len(parts) == 1:
-                        # /log - show log directory
-                        show_log_directory(open_file_manager=True)
-                    else:
-                        # /log <filename> - read specific log file
-                        filename = parts[1].strip("\"'")
-                        read_log_file(filename)
-                    continue
-
-                else:
+                if result is None:
                     print(f"{Colors.RED}❌ Unknown command: {user_input}{Colors.RESET}")
                     print(f"{Colors.DIM}Type /help to see available commands{Colors.RESET}\n")
-                    continue
+                continue
 
             # Normal conversation - exit check
             if user_input.lower() in ["exit", "quit", "q"]:
@@ -694,82 +865,7 @@ async def run_agent(workspace_dir: Path, task: str = None):
                 f"\n{Colors.BRIGHT_BLUE}Agent{Colors.RESET} {Colors.DIM}›{Colors.RESET} {Colors.DIM}Thinking... (Esc to cancel){Colors.RESET}\n"
             )
             agent.add_user_message(user_input)
-
-            # Create cancellation event
-            cancel_event = asyncio.Event()
-            agent.cancel_event = cancel_event
-
-            # Esc key listener thread
-            esc_listener_stop = threading.Event()
-            esc_cancelled = [False]  # Mutable container for thread access
-
-            def esc_key_listener():
-                """Listen for Esc key in a separate thread."""
-                if platform.system() == "Windows":
-                    try:
-                        import msvcrt
-
-                        while not esc_listener_stop.is_set():
-                            if msvcrt.kbhit():
-                                char = msvcrt.getch()
-                                if char == b"\x1b":  # Esc
-                                    print(f"\n{Colors.BRIGHT_YELLOW}⏹️  Esc pressed, cancelling...{Colors.RESET}")
-                                    esc_cancelled[0] = True
-                                    cancel_event.set()
-                                    break
-                            esc_listener_stop.wait(0.05)
-                    except Exception:
-                        pass
-                    return
-
-                # Unix/macOS
-                try:
-                    import select
-                    import termios
-                    import tty
-
-                    fd = sys.stdin.fileno()
-                    old_settings = termios.tcgetattr(fd)
-
-                    try:
-                        tty.setcbreak(fd)
-                        while not esc_listener_stop.is_set():
-                            rlist, _, _ = select.select([sys.stdin], [], [], 0.05)
-                            if rlist:
-                                char = sys.stdin.read(1)
-                                if char == "\x1b":  # Esc
-                                    print(f"\n{Colors.BRIGHT_YELLOW}⏹️  Esc pressed, cancelling...{Colors.RESET}")
-                                    esc_cancelled[0] = True
-                                    cancel_event.set()
-                                    break
-                    finally:
-                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                except Exception:
-                    pass
-
-            # Start Esc listener thread
-            esc_thread = threading.Thread(target=esc_key_listener, daemon=True)
-            esc_thread.start()
-
-            # Run agent with periodic cancellation check
-            try:
-                agent_task = asyncio.create_task(agent.run())
-
-                # Poll for cancellation while agent runs
-                while not agent_task.done():
-                    if esc_cancelled[0]:
-                        cancel_event.set()
-                    await asyncio.sleep(0.1)
-
-                # Get result
-                _ = agent_task.result()
-
-            except asyncio.CancelledError:
-                print(f"\n{Colors.BRIGHT_YELLOW}⚠️  Agent execution cancelled{Colors.RESET}")
-            finally:
-                agent.cancel_event = None
-                esc_listener_stop.set()
-                esc_thread.join(timeout=0.2)
+            await _run_agent_turn(agent, user_input)
 
             # Visual separation
             print(f"\n{Colors.DIM}{'─' * 60}{Colors.RESET}\n")
@@ -783,7 +879,7 @@ async def run_agent(workspace_dir: Path, task: str = None):
             print(f"\n{Colors.RED}❌ Error: {e}{Colors.RESET}")
             print(f"{Colors.DIM}{'─' * 60}{Colors.RESET}\n")
 
-    # 11. Cleanup MCP connections
+    # 7. Cleanup MCP connections
     await _quiet_cleanup()
 
 
