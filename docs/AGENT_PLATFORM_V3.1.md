@@ -262,7 +262,6 @@ mini-agent/
 │   │   ├── skill.py            # Skill + SkillManager
 │   │   ├── orchestrator.py     # ReAct 编排器
 │   │   ├── events.py           # 流式事件类型
-│   │   ├── sub_agent.py        # 子代理抽象
 │   ├── connectors/             # 外部服务连接器
 │   │   └── sqlbot.py           # SQLBot HTTP 客户端
 │   ├── memory/                 # 会话持久化
