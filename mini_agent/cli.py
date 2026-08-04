@@ -500,17 +500,9 @@ async def run_agent(workspace_dir: Path, task: str = None):
         return
 
     # 2. Initialize LLM client
-    from mini_agent.logger import RetryConfig as RetryConfigBase
-
-    # Convert configuration format
-    retry_config = RetryConfigBase(
-        enabled=config.llm.retry.enabled,
-        max_retries=config.llm.retry.max_retries,
-        initial_delay=config.llm.retry.initial_delay,
-        max_delay=config.llm.retry.max_delay,
-        exponential_base=config.llm.retry.exponential_base,
-        retryable_exceptions=(Exception,),
-    )
+    # config.llm.retry is already the dataclass RetryConfig from logger.py
+    # (the same type LLMClient consumes), so we can pass it through directly.
+    retry_config = config.llm.retry
 
     # Create retry callback function to display retry information in terminal
     def on_retry(exception: Exception, attempt: int):
@@ -527,13 +519,13 @@ async def run_agent(workspace_dir: Path, task: str = None):
         provider=provider,
         api_base=config.llm.api_base,
         model=config.llm.model,
-        retry_config=retry_config if config.llm.retry.enabled else None,
+        retry_config=retry_config if retry_config.enabled else None,
     )
 
     # Set retry callback
-    if config.llm.retry.enabled:
+    if retry_config.enabled:
         llm_client.retry_callback = on_retry
-        print(f"{Colors.GREEN}✅ LLM retry mechanism enabled (max {config.llm.retry.max_retries} retries){Colors.RESET}")
+        print(f"{Colors.GREEN}✅ LLM retry mechanism enabled (max {retry_config.max_retries} retries){Colors.RESET}")
 
     # 3. Initialize base tools (independent of workspace)
     tools, plugins = await initialize_base_tools(config)

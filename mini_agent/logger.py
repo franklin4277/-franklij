@@ -114,11 +114,11 @@ class AgentLogger:
 
 # ---- Retry decorators --------------------------------------------------------
 class RetryConfig:
-    """Retry configuration. Plain dataclass-style (not Pydantic).
+    """Retry configuration.
 
-    Note: config.RetryConfig is the Pydantic version loaded from YAML;
-    this is the runtime version used by decorators. They have the same
-    fields but different types.
+    The single source of truth for retry settings - used both by the
+    ``async_retry`` decorator and by ``LLMConfig`` / ``Config.from_yaml``
+    for loading retry options from YAML.
     """
 
     def __init__(

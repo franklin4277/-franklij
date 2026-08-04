@@ -35,7 +35,6 @@ from mini_agent.agent import Agent
 from mini_agent.cli import add_workspace_tools, initialize_base_tools
 from mini_agent.config import Config
 from mini_agent.llm import LLMClient
-from mini_agent.logger import RetryConfig as RetryConfigBase
 from mini_agent.schema import Message
 
 logger = logging.getLogger(__name__)
@@ -181,7 +180,7 @@ async def run_acp_server(config: Config | None = None) -> None:
     else:
         system_prompt = "You are a helpful AI assistant."
     rcfg = config.llm.retry
-    llm = LLMClient(api_key=config.llm.api_key, api_base=config.llm.api_base, model=config.llm.model, retry_config=RetryConfigBase(enabled=rcfg.enabled, max_retries=rcfg.max_retries, initial_delay=rcfg.initial_delay, max_delay=rcfg.max_delay, exponential_base=rcfg.exponential_base))
+    llm = LLMClient(api_key=config.llm.api_key, api_base=config.llm.api_base, model=config.llm.model, retry_config=rcfg)
     reader, writer = await stdio_streams()
     AgentSideConnection(lambda conn: MiniMaxACPAgent(conn, config, llm, base_tools, system_prompt, plugins=plugins), writer, reader)
     logger.info("Mini-Agent ACP server running")

@@ -6,21 +6,17 @@ Provides unified configuration loading and management functionality
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-
-class RetryConfig(BaseModel):
-    """Retry configuration"""
-
-    enabled: bool = True
-    max_retries: int = 3
-    initial_delay: float = 1.0
-    max_delay: float = 60.0
-    exponential_base: float = 2.0
+from .logger import RetryConfig
 
 
 class LLMConfig(BaseModel):
     """LLM configuration"""
+
+    # RetryConfig is a plain (non-Pydantic) class from logger.py; allow it
+    # as a field type so Pydantic does not try to coerce it into a BaseModel.
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     api_key: str
     api_base: str = "https://api.minimax.io"
