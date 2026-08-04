@@ -7,12 +7,17 @@ English | [中文](./README_CN.md)
 This project comes packed with features designed for a robust and intelligent agent development experience:
 
 *   ✅ **Full Agent Execution Loop**: A complete and reliable foundation with a basic toolset for file system and shell operations.
-*   ✅ **Persistent Memory**: An active **Session Note Tool** ensures the agent retains key information across multiple sessions.
+*   ✅ **Plugin System**: Unified Tools/MCP/Skills management via the `Plugins` registry — add capabilities through Python classes, MCP servers, or Skill folders.
+*   ✅ **Dual LLM Provider**: Supports both Anthropic and OpenAI protocol, auto-adapting to MiniMax API endpoints.
+*   ✅ **ReAct Orchestrator**: Standard think→act→observe loop with streaming events, cancel support (Esc key), and pluggable strategies.
+*   ✅ **Persistent Memory**: Active **Session Note Tool** for cross-session memory, plus **SessionStore** for conversation state persistence.
 *   ✅ **Intelligent Context Management**: Automatically summarizes conversation history to handle contexts up to a configurable token limit, enabling infinitely long tasks.
-*   ✅ **Claude Skills Integration**: Comes with 15 professional skills for documents, design, testing, and development.
-*   ✅ **MCP Tool Integration**: Natively supports MCP for tools like knowledge graph access and web search.
+*   ✅ **Claude Skills Integration**: Comes with 15 professional skills for documents (PDF, DOCX, PPTX, XLSX), design, testing, and development.
+*   ✅ **MCP Tool Integration**: Natively supports MCP (stdio, SSE, streamable HTTP) for tools like knowledge graph access and web search.
+*   ✅ **Data Query API + Web UI**: Built-in FastAPI server and Next.js dashboard for natural language data querying via SQLBot.
+*   ✅ **ACP Integration**: Agent Client Protocol support for Zed editor and other ACP-compatible editors.
 *   ✅ **Comprehensive Logging**: Detailed logs for every request, response, and tool execution for easy debugging.
-*   ✅ **Clean & Simple Design**: A beautiful CLI and a codebase that is easy to understand, making it the perfect starting point for building advanced agents.
+*   ✅ **Clean & Simple Design**: A beautiful CLI and a well-structured, easy-to-understand codebase.
 
 ## Table of Contents
 
@@ -283,9 +288,9 @@ pytest tests/test_agent.py tests/test_note_tool.py -v
 
 If you encounter `[SSL: CERTIFICATE_VERIFY_FAILED]` error:
 
-**Quick fix for testing** (modify `mini_agent/llm.py`):
+**Quick fix for testing** (modify `mini_agent/llm/anthropic_client.py` or `mini_agent/llm/openai_client.py`):
 ```python
-# Line 50: Add verify=False to AsyncClient
+# Add verify=False to the httpx client configuration
 async with httpx.AsyncClient(timeout=120.0, verify=False) as client:
 ```
 
@@ -306,6 +311,10 @@ python -m mini_agent.cli
 ```
 
 ## Related Documentation
+
+- [Architecture Overview](docs/AGENT_PLATFORM_V3.1.md) — Plugin system, Tools/MCP/Skills design
+- [Agent Flows](docs/AGENT_FLOWS.md) — Sequence diagrams for data query and analysis workflows
+- [Extending Mini-Agent](docs/EXTENDING.md) — How to add Tools, MCP servers, and Skills
 
 ## Community
 

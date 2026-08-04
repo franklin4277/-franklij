@@ -7,12 +7,17 @@
 该项目具备一系列为稳健、智能的 Agent 开发而设计的特性：
 
 *   ✅ **完整的 Agent 执行循环**：一个完整可靠的执行框架，配备了文件系统和 Shell 操作的基础工具集。
-*   ✅ **持久化记忆**：通过内置的 **Session Note Tool**，Agent 能够在多个会话中保留关键信息。
+*   ✅ **插件系统**：通过 `Plugins` 注册表统一管理 Tools/MCP/Skills —— 可以用 Python 类、MCP 服务器或 Skill 文件夹三种方式扩展能力。
+*   ✅ **双 LLM 协议支持**：同时支持 Anthropic 和 OpenAI 协议，自动适配 MiniMax API 端点。
+*   ✅ **ReAct 编排器**：标准的 思考→行动→观察 循环，支持流式事件、Esc 取消和可插拔策略。
+*   ✅ **持久化记忆**：通过内置的 **Session Note Tool** 实现跨会话记忆，同时提供 **SessionStore** 管理对话状态持久化。
 *   ✅ **智能上下文管理**：自动对会话历史进行摘要，可处理长达可配置 Token 上限的上下文，从而支持无限长的任务。
-*   ✅ **集成 Claude Skills**：内置 15 种专业技能，涵盖文档处理、设计、测试和开发等领域。
-*   ✅ **集成 MCP 工具**：原生支持 MCP 协议，可轻松接入知识图谱、网页搜索等工具。
+*   ✅ **集成 Claude Skills**：内置 15 种专业技能，涵盖文档处理（PDF、DOCX、PPTX、XLSX）、设计、测试和开发等领域。
+*   ✅ **集成 MCP 工具**：原生支持 MCP 协议（stdio、SSE、streamable HTTP），可接入知识图谱、网页搜索等工具。
+*   ✅ **数据查询 API + Web 界面**：内置 FastAPI 服务器和 Next.js 仪表盘，支持通过自然语言查询数据库。
+*   ✅ **ACP 集成**：支持 Agent Client Protocol，可集成 Zed 编辑器及其他兼容 ACP 的编辑器。
 *   ✅ **全面的日志记录**：为每个请求、响应和工具执行提供详细日志，便于调试。
-*   ✅ **简洁明了的设计**：美观的命令行界面和易于理解的代码库，使其成为构建高级 Agent 的理想起点。
+*   ✅ **简洁明了的设计**：美观的命令行界面和结构清晰、易于理解的代码库。
 
 ## 目录
 
@@ -284,9 +289,9 @@ pytest tests/test_agent.py tests/test_note_tool.py -v
 
 如果遇到 `[SSL: CERTIFICATE_VERIFY_FAILED]` 错误:
 
-**测试环境快速修复** (修改 `mini_agent/llm.py`):
+**测试环境快速修复** (修改 `mini_agent/llm/anthropic_client.py` 或 `mini_agent/llm/openai_client.py`):
 ```python
-# 第 50 行: 给 AsyncClient 添加 verify=False
+# 给 httpx client 配置添加 verify=False
 async with httpx.AsyncClient(timeout=120.0, verify=False) as client:
 ```
 
@@ -307,6 +312,10 @@ python -m mini_agent.cli
 ```
 
 ## 相关文档
+
+- [架构概览](docs/AGENT_PLATFORM_V3.1.md) — 插件系统、Tools/MCP/Skills 设计
+- [Agent 流程图](docs/AGENT_FLOWS.md) — 数据查询和分析工作流的时序图
+- [扩展指南](docs/EXTENDING.md) — 如何添加 Tool、MCP 服务器和 Skill
 
 ## 社区
 
