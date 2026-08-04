@@ -33,6 +33,8 @@ class AgentConfig(BaseModel):
     system_prompt_path: str = "system_prompt.md"
     token_limit: int = 80000  # Summary triggered when tokens exceed this value
     box_width: int = 58      # Terminal box display width
+    tool_arg_truncate_len: int = 200  # Truncate tool args longer than this in display
+    tool_result_truncate_len: int = 300  # Truncate tool results longer than this in display
 
 
 class MCPConfig(BaseModel):
@@ -133,6 +135,8 @@ class Config(BaseModel):
             system_prompt_path=data.get("system_prompt_path", "system_prompt.md"),
             token_limit=data.get("token_limit", 80000),
             box_width=data.get("box_width", 58),
+            tool_arg_truncate_len=data.get("tool_arg_truncate_len", 200),
+            tool_result_truncate_len=data.get("tool_result_truncate_len", 300),
         )
 
         # Parse tools configuration

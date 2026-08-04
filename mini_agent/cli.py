@@ -534,6 +534,10 @@ async def _build_agent(config: Config, workspace_dir: Path) -> Agent:
         tools=tools,
         max_steps=config.agent.max_steps,
         workspace_dir=str(workspace_dir),
+        token_limit=config.agent.token_limit,
+        box_width=config.agent.box_width,
+        tool_arg_truncate_len=config.agent.tool_arg_truncate_len,
+        tool_result_truncate_len=config.agent.tool_result_truncate_len,
         plugins=plugins,
     )
     return agent

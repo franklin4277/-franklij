@@ -27,6 +27,9 @@ class Agent:
         max_steps: int = 50,
         workspace_dir: str = "./workspace",
         token_limit: int = 80000,  # Summary triggered when tokens exceed this value
+        box_width: int = 58,  # Terminal box display width
+        tool_arg_truncate_len: int = 200,  # Truncate tool args longer than this in display
+        tool_result_truncate_len: int = 300,  # Truncate tool results longer than this in display
         plugins: "PluginRegistry | None" = None,
     ):
         self.llm = llm_client
@@ -52,6 +55,9 @@ class Agent:
         self.tools = {tool.name: tool for tool in base_tools}
         self.max_steps = max_steps
         self.token_limit = token_limit
+        self.box_width = box_width
+        self.tool_arg_truncate_len = tool_arg_truncate_len
+        self.tool_result_truncate_len = tool_result_truncate_len
         self.workspace_dir = Path(workspace_dir)
         # Cancellation event for interrupting agent execution (set externally, e.g., by Esc key)
         self.cancel_event: Optional[asyncio.Event] = None
@@ -391,14 +397,14 @@ Requirements:
     # ---- run() helpers -------------------------------------------------------
     def _emit_step_header(self, step: int) -> None:
         """Print the box-drawing header announcing the current step."""
-        BOX_WIDTH = 58
+        box_width = self.box_width
         step_text = f"{Colors.BOLD}{Colors.BRIGHT_CYAN}💭 Step {step + 1}/{self.max_steps}{Colors.RESET}"
         step_display_width = calculate_display_width(step_text)
-        padding = max(0, BOX_WIDTH - 1 - step_display_width)  # -1 for leading space
+        padding = max(0, box_width - 1 - step_display_width)  # -1 for leading space
 
-        print(f"\n{Colors.DIM}╭{'─' * BOX_WIDTH}╮{Colors.RESET}")
+        print(f"\n{Colors.DIM}╭{'─' * box_width}╮{Colors.RESET}")
         print(f"{Colors.DIM}│{Colors.RESET} {step_text}{' ' * padding}{Colors.DIM}│{Colors.RESET}")
-        print(f"{Colors.DIM}╰{'─' * BOX_WIDTH}╯{Colors.RESET}")
+        print(f"{Colors.DIM}╰{'─' * box_width}╯{Colors.RESET}")
 
     def _emit_step_footer(self, step: int, step_start_time: float, run_start_time: float) -> None:
         """Print the elapsed-time line closing out the current step."""
@@ -468,8 +474,8 @@ Requirements:
         truncated_args = {}
         for key, value in arguments.items():
             value_str = str(value)
-            if len(value_str) > 200:
-                truncated_args[key] = value_str[:200] + "..."
+            if len(value_str) > self.tool_arg_truncate_len:
+                truncated_args[key] = value_str[: self.tool_arg_truncate_len] + "..."
             else:
                 truncated_args[key] = value
         args_json = json.dumps(truncated_args, indent=2, ensure_ascii=False)
@@ -508,8 +514,8 @@ Requirements:
         """Print a preview of the tool result, or the error if it failed."""
         if result.success:
             result_text = result.content
-            if len(result_text) > 300:
-                result_text = result_text[:300] + f"{Colors.DIM}...{Colors.RESET}"
+            if len(result_text) > self.tool_result_truncate_len:
+                result_text = result_text[: self.tool_result_truncate_len] + f"{Colors.DIM}...{Colors.RESET}"
             print(f"{Colors.BRIGHT_GREEN}✓ Result:{Colors.RESET} {result_text}")
         else:
             print(f"{Colors.BRIGHT_RED}✗ Error:{Colors.RESET} {Colors.RED}{result.error}{Colors.RESET}")
