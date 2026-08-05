@@ -26,8 +26,7 @@ outputs: |
 2. **登录**：`access_token` 工具
 3. **创建会话**：`mcp_start` 工具
 4. **执行查询**：`mcp_question` 工具
-5. **下载图表**到 `workspace/{session_id}/charts/`
-6. **渲染 Markdown** 表格
+5. **渲染 Markdown** 表格
 
 ## 工具映射
 
@@ -48,7 +47,7 @@ outputs: |
 
 ## 性能
 
-- 单次查询：3-5 秒（含图表下载）
+- 单次查询：3-5 秒
 - 上下文用完后支持多轮（同 session 自动延续）
 
 ## 示例
