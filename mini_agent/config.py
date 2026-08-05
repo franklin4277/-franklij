@@ -6,7 +6,7 @@ Provides unified configuration loading and management functionality
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from .logger import RetryConfig
 
@@ -14,7 +14,7 @@ from .logger import RetryConfig
 class LLMConfig(BaseModel):
     """LLM configuration"""
 
-    # RetryConfig is a plain (non-Pydantic) class from logger.py; allow it
+    # RetryConfig is a plain (non-Pydantic) dataclass from logger.py; allow it
     # as a field type so Pydantic does not try to coerce it into a BaseModel.
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -23,6 +23,24 @@ class LLMConfig(BaseModel):
     model: str = "MiniMax-M2.5"
     provider: str = "anthropic"  # "anthropic" or "openai"
     retry: RetryConfig = Field(default_factory=RetryConfig)
+
+    @field_serializer("retry")
+    def _serialize_retry(self, retry: RetryConfig) -> dict:
+        """Serialize RetryConfig dataclass to a plain dict for JSON output.
+
+        Pydantic V2 cannot serialize arbitrary dataclass types natively, so we
+        convert the RetryConfig into a dict. ``retryable_exceptions`` (a tuple
+        of exception classes) is serialized as a list of class names since
+        classes are not JSON-serializable.
+        """
+        return {
+            "enabled": retry.enabled,
+            "max_retries": retry.max_retries,
+            "initial_delay": retry.initial_delay,
+            "max_delay": retry.max_delay,
+            "exponential_base": retry.exponential_base,
+            "retryable_exceptions": [exc.__name__ for exc in retry.retryable_exceptions],
+        }
 
 
 class AgentConfig(BaseModel):

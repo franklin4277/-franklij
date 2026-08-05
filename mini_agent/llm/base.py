@@ -32,7 +32,7 @@ class LLMClientBase(ABC):
         self.api_key = api_key
         self.api_base = api_base
         self.model = model
-        self.retry_config = retry_config or RetryConfig()
+        self.retry_config = retry_config if retry_config is not None else RetryConfig()
 
         # Callback for tracking retry count
         self.retry_callback = None

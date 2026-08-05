@@ -55,7 +55,7 @@ class LLMClient:
         self.provider = provider
         self.api_key = api_key
         self.model = model
-        self.retry_config = retry_config or RetryConfig()
+        self.retry_config = retry_config if retry_config is not None else RetryConfig()
 
         # Normalize api_base (remove trailing slash)
         api_base = api_base.rstrip("/")
