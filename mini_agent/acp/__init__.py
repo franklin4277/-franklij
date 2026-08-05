@@ -109,7 +109,8 @@ class MiniMaxACPAgent:
         if not state:
             # Auto-create session if not found (compatibility with clients that skip newSession)
             logger.warning(f"Session '{params.sessionId}' not found, auto-creating new session")
-            new_session = await self.newSession(NewSessionRequest(cwd=None))
+            fallback_cwd = str(Path(self._config.agent.workspace_dir).expanduser().resolve())
+            new_session = await self.newSession(NewSessionRequest(cwd=fallback_cwd, mcpServers=[]))
             state = self._sessions.get(new_session.sessionId)
             if not state:
                 logger.error("Failed to auto-create session")
