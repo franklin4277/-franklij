@@ -1,5 +1,6 @@
 """Integration tests for the MiniMax ACP adapter."""
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -82,8 +83,11 @@ async def test_acp_turn_executes_tool(acp_agent):
 
 
 @pytest.mark.asyncio
-async def test_acp_invalid_session(acp_agent):
+async def test_acp_unknown_session_auto_creates_with_configured_workspace(acp_agent):
     agent, _ = acp_agent
     prompt = SimpleNamespace(sessionId="missing", prompt=[{"text": "?"}])
     response = await agent.prompt(prompt)
-    assert response.stopReason == "refusal"
+    assert response.stopReason == "end_turn"
+    assert len(agent._sessions) == 1
+    created_session = next(iter(agent._sessions.values()))
+    assert Path(created_session.agent.workspace_dir) == Path(agent._config.agent.workspace_dir)
