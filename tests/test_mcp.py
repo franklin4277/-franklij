@@ -80,6 +80,16 @@ class TestDetermineConnectionType:
         assert _determine_connection_type(config) == "streamable_http"
 
 
+def test_streamable_http_transport_api_is_available():
+    """Support both the mcp 1.x and 2.x Streamable HTTP API names."""
+    from mini_agent.tools import mcp_loader
+
+    assert (
+        mcp_loader._streamable_http_client is not None
+        or mcp_loader._legacy_streamable_http_client is not None
+    )
+
+
 # =============================================================================
 # MCPServerConnection Initialization Tests
 # =============================================================================

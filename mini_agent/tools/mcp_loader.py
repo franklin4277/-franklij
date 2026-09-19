@@ -10,7 +10,20 @@ from typing import Any, Literal
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
-from mcp.client.streamable_http import streamablehttp_client
+
+try:
+    from mcp.client.streamable_http import (
+        streamable_http_client as _streamable_http_client,
+    )
+except ImportError:  # mcp < 2.0
+    _streamable_http_client = None
+
+try:
+    from mcp.client.streamable_http import (
+        streamablehttp_client as _legacy_streamable_http_client,
+    )
+except ImportError:  # mcp >= 2.0
+    _legacy_streamable_http_client = None
 
 from .base import Tool, ToolResult
 
@@ -255,9 +268,29 @@ class MCPServerConnection:
         connect_timeout = self._get_connect_timeout()
         sse_read_timeout = self._get_sse_read_timeout()
 
-        # streamablehttp_client returns (read, write, get_session_id)
+        if _streamable_http_client is not None:
+            # mcp 2.x renamed the transport and accepts a configured httpx2 client.
+            import httpx2
+
+            timeout = httpx2.Timeout(connect_timeout, read=sse_read_timeout)
+            http_client = await self.exit_stack.enter_async_context(
+                httpx2.AsyncClient(
+                    headers=self.headers or None,
+                    timeout=timeout,
+                    follow_redirects=True,
+                )
+            )
+            read_stream, write_stream = await self.exit_stack.enter_async_context(
+                _streamable_http_client(url=self.url, http_client=http_client)
+            )
+            return read_stream, write_stream
+
+        if _legacy_streamable_http_client is None:
+            raise ImportError("The installed mcp package has no Streamable HTTP client")
+
+        # mcp 1.x returns (read, write, get_session_id) and accepts timeout kwargs.
         read_stream, write_stream, _ = await self.exit_stack.enter_async_context(
-            streamablehttp_client(
+            _legacy_streamable_http_client(
                 url=self.url,
                 headers=self.headers if self.headers else None,
                 timeout=connect_timeout,
