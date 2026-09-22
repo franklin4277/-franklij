@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from mini_agent.acp import MiniMaxACPAgent
+from mini_agent.acp import MiniMaxACPAgent, _tool_kind
 from mini_agent.config import AgentConfig, Config, LLMConfig, ToolsConfig
 from mini_agent.schema import FunctionCall, LLMResponse, ToolCall
 from mini_agent.tools.base import Tool, ToolResult
@@ -57,6 +57,22 @@ class EchoTool(Tool):
         return ToolResult(success=True, content=f"tool:{text}")
 
 
+@pytest.mark.parametrize(
+    ("tool_name", "expected_kind"),
+    [
+        ("read_file", "read"),
+        ("write_file", "edit"),
+        ("edit_file", "edit"),
+        ("search", "search"),
+        ("parallel_search", "search"),
+        ("bash", "execute"),
+        ("unknown_tool", "other"),
+    ],
+)
+def test_acp_maps_tool_name_to_kind(tool_name, expected_kind):
+    assert _tool_kind(tool_name) == expected_kind
+
+
 @pytest.fixture
 def acp_agent(tmp_path):
     config = Config(
@@ -77,6 +93,12 @@ async def test_acp_turn_executes_tool(acp_agent):
     response = await agent.prompt(prompt)
     assert response.stopReason == "end_turn"
     assert any("tool:ping" in str(update) for update in conn.updates)
+    tool_call_updates = [
+        update.update
+        for update in conn.updates
+        if getattr(update.update, "sessionUpdate", None) == "tool_call"
+    ]
+    assert tool_call_updates[0].kind == "other"
     await agent.cancel(SimpleNamespace(sessionId=session.sessionId))
     assert agent._sessions[session.sessionId].cancelled
 

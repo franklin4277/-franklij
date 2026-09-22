@@ -67,6 +67,36 @@ class SessionState:
     cancelled: bool = False
 
 
+_TOOL_KIND_BY_NAME = {
+    "read_file": "read",
+    "write_file": "edit",
+    "edit_file": "edit",
+    "bash": "execute",
+    "bash_output": "execute",
+    "bash_kill": "execute",
+}
+
+
+def _tool_kind(tool_name: str) -> str:
+    """Map a tool name to the closest ACP tool-call kind."""
+    normalized_name = tool_name.lower()
+    if normalized_name in _TOOL_KIND_BY_NAME:
+        return _TOOL_KIND_BY_NAME[normalized_name]
+    if "search" in normalized_name:
+        return "search"
+    if normalized_name.startswith(("fetch", "browse")):
+        return "fetch"
+    if normalized_name.startswith("delete"):
+        return "delete"
+    if normalized_name.startswith(("move", "rename")):
+        return "move"
+    if normalized_name == "think":
+        return "think"
+    if normalized_name == "switch_mode":
+        return "switch_mode"
+    return "other"
+
+
 class MiniMaxACPAgent:
     """Minimal ACP adapter wrapping the existing Agent runtime."""
 
@@ -148,7 +178,7 @@ class MiniMaxACPAgent:
                 # Show tool name with key arguments for better visibility
                 args_preview = ", ".join(f"{k}={repr(v)[:50]}" for k, v in list(args.items())[:2]) if isinstance(args, dict) else ""
                 label = f"🔧 {name}({args_preview})" if args_preview else f"🔧 {name}()"
-                await self._send(session_id, start_tool_call(call.id, label, kind="execute", raw_input=args))
+                await self._send(session_id, start_tool_call(call.id, label, kind=_tool_kind(name), raw_input=args))
                 tool = agent.tools.get(name)
                 if not tool:
                     text, status = f"[ERROR] Unknown tool: {name}", "failed"
