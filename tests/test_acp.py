@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from mini_agent.acp import MiniMaxACPAgent
+from mini_agent.acp import MiniMaxACPAgent, _create_llm_client, _resolve_provider
 from mini_agent.config import AgentConfig, Config, LLMConfig, ToolsConfig
-from mini_agent.schema import FunctionCall, LLMResponse, ToolCall
+from mini_agent.schema import FunctionCall, LLMProvider, LLMResponse, ToolCall
 from mini_agent.tools.base import Tool, ToolResult
 
 
@@ -55,6 +55,25 @@ class EchoTool(Tool):
 
     async def execute(self, text: str):
         return ToolResult(success=True, content=f"tool:{text}")
+
+
+def test_acp_uses_configured_provider(monkeypatch):
+    captured = {}
+
+    class StubLLMClient:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr("mini_agent.acp.LLMClient", StubLLMClient)
+    config = Config(
+        llm=LLMConfig(api_key="test-key", provider="openai"),
+        agent=AgentConfig(),
+        tools=ToolsConfig(),
+    )
+
+    assert _resolve_provider(config) == LLMProvider.OPENAI
+    _create_llm_client(config)
+    assert captured["provider"] == LLMProvider.OPENAI
 
 
 @pytest.fixture
