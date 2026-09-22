@@ -36,7 +36,7 @@ from mini_agent.cli import add_workspace_tools, initialize_base_tools
 from mini_agent.config import Config
 from mini_agent.llm import LLMClient
 from mini_agent.retry import RetryConfig as RetryConfigBase
-from mini_agent.schema import Message
+from mini_agent.schema import LLMProvider, Message
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,29 @@ except Exception:  # pragma: no cover - defensive
 class SessionState:
     agent: Agent
     cancelled: bool = False
+
+
+def _resolve_provider(config: Config) -> LLMProvider:
+    """Resolve the configured provider for the ACP LLM client."""
+    return LLMProvider.ANTHROPIC if config.llm.provider.lower() == "anthropic" else LLMProvider.OPENAI
+
+
+def _create_llm_client(config: Config) -> LLMClient:
+    """Create the ACP LLM client using the configured provider and retry policy."""
+    rcfg = config.llm.retry
+    return LLMClient(
+        api_key=config.llm.api_key,
+        provider=_resolve_provider(config),
+        api_base=config.llm.api_base,
+        model=config.llm.model,
+        retry_config=RetryConfigBase(
+            enabled=rcfg.enabled,
+            max_retries=rcfg.max_retries,
+            initial_delay=rcfg.initial_delay,
+            max_delay=rcfg.max_delay,
+            exponential_base=rcfg.exponential_base,
+        ),
+    )
 
 
 class MiniMaxACPAgent:
@@ -182,8 +205,7 @@ async def run_acp_server(config: Config | None = None) -> None:
         meta = skill_loader.get_skills_metadata_prompt()
         if meta:
             system_prompt = f"{system_prompt.rstrip()}\n\n{meta}"
-    rcfg = config.llm.retry
-    llm = LLMClient(api_key=config.llm.api_key, api_base=config.llm.api_base, model=config.llm.model, retry_config=RetryConfigBase(enabled=rcfg.enabled, max_retries=rcfg.max_retries, initial_delay=rcfg.initial_delay, max_delay=rcfg.max_delay, exponential_base=rcfg.exponential_base))
+    llm = _create_llm_client(config)
     reader, writer = await stdio_streams()
     AgentSideConnection(lambda conn: MiniMaxACPAgent(conn, config, llm, base_tools, system_prompt), writer, reader)
     logger.info("Mini-Agent ACP server running")
